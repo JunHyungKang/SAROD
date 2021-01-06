@@ -1,0 +1,15 @@
+gpu_id: 2
+lr: 1e-3
+cv_dir: opt.save_path
+batch_size: 24
+step_batch_size: 5
+img_size: 480
+epoch_step: 20
+max_epochs: opt.epochs
+num_workers: 0
+parallel: False
+alpha: 0.8
+beta: 0.1
+sigma: 0.5
+load: None
+split: 4

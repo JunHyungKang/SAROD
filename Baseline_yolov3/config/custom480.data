@@ -1,0 +1,6 @@
+classes= 1
+train=data/custom480/train.txt
+valid=data/custom480/valid_rl.txt
+test=data/custom480/test.txt
+names=data/custom480/classes.names
+eval=x480

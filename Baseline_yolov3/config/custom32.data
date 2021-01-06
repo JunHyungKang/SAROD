@@ -1,0 +1,5 @@
+classes=1
+train=data/custom32/train.txt
+valid=data/custom32/valid.txt
+test=data/custom32/test.txt
+names=data/custom32/classes.names

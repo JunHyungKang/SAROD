@@ -1,0 +1,19 @@
+cfg: "yolov5/models/yolov5x_custom.yaml"
+data: "yolov5/data/HRSID_800_od.yaml"
+hyp: ''
+img_size: [96, 96]
+rect: False
+resume: False
+nosave: False
+notest: True
+noautoanchor: True
+evolve: False
+bucket: ''
+cache_images: False
+weights: ''''
+name: "yolov5x_800_96_200epoch"
+device: 2
+multi_scale: False
+single_cls: True
+sync_bn: False
+local_rank: -1
