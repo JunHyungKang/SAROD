@@ -11,5 +11,5 @@ parallel: False
 alpha: 0.8
 beta: 0.1
 sigma: 0.5
-load: None
+load:
 split: 4

@@ -668,7 +668,7 @@ class yolov5():
                     # Append statistics (correct, conf, pcls, tcls)
                     # stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
                     # stats = (correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)
-                    print(np.array(tcls).shape)
+                    # print(np.array(tcls).shape)
                     stats = np.array([np.array(correct.cpu()),
                                       np.array(pred[:, 4].cpu()),
                                       np.array(pred[:, 5].cpu()),

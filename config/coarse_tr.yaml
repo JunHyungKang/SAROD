@@ -12,7 +12,7 @@ bucket: ''
 cache_images: False
 weights: ''''
 name: "yolov5x_800_96_200epoch"
-device: 2
+device: 1
 multi_scale: False
 single_cls: True
 sync_bn: False

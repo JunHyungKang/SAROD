@@ -104,7 +104,11 @@
       <workItem from="1609830413063" duration="6167000" />
       <workItem from="1609894681001" duration="15000" />
       <workItem from="1609896160029" duration="1510000" />
-      <workItem from="1609905963347" duration="23076000" />
+      <workItem from="1609905963347" duration="23552000" />
+      <workItem from="1609996784450" duration="157000" />
+      <workItem from="1609996950849" duration="222000" />
+      <workItem from="1609997181858" duration="74000" />
+      <workItem from="1609997343106" duration="5533000" />
     </task>
     <servers />
   </component>
@@ -121,6 +125,7 @@
         </entry>
       </map>
     </option>
+    <option name="oldMeFiltersMigrated" value="true" />
   </component>
   <component name="VcsManagerConfiguration">
     <ignored-roots>

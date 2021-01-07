@@ -17,7 +17,7 @@ if __name__ == '__main__':
     parser.add_argument('--batch_size', type=int, default=24, help="Total batch size for all gpus.")
     parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
-    parser.add_argument('--eval_epoch', type=int, default=2)
+    parser.add_argument('--eval_epoch', type=int, default=1)
     parser.add_argument('--step_batch_size', type=int, default=100)
     parser.add_argument('--save_path', default='save')
     parser.add_argument('--rl_weight', default=None)
@@ -86,22 +86,25 @@ if __name__ == '__main__':
         # Validation
         if e % 10 == 0:
             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path)
-
-            fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
-            coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
-
-            fine_val_loader = load_dataloader(bs, fine_val_dataset)
-            coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
-
-            fine_nb = len(fine_val_loader)
-            coarse_nb = len(coarse_train_loader)
-
             fine_results, coarse_results = [], []
-            for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
-                fine_results.append(fine_detector.eval(fine_val))
 
-            for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
-                coarse_results.append(coarse_detector.eval(coarse_val))
+
+            print(len(fine_dataset.tolist()))
+            print(len(coarse_dataset.tolist()))
+
+            if len(fine_dataset.tolist()) > 0:
+                fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
+                fine_val_loader = load_dataloader(bs, fine_val_dataset)
+                fine_nb = len(fine_val_loader)
+                for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
+                    fine_results.append(fine_detector.eval(fine_val))
+
+            if len(coarse_dataset.tolist()) > 0:
+                coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+                coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
+                coarse_nb = len(coarse_train_loader)
+                for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
+                    coarse_results.append(coarse_detector.eval(coarse_val))
 
             map50 = compute_map(fine_results, coarse_results)
             print('MAP: \n', map50 )
@@ -112,8 +115,12 @@ if __name__ == '__main__':
     fine_test_dataset = load_dataset(fine_dataset, fine_tr, bs)
     coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
 
-    fine_test_loader = load_dataloader(bs, fine_test_dataset)
-    coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
+    if len(fine_test_dataset.tolist()) > 0:
+        fine_test_loader = load_dataloader(bs, fine_test_dataset)
+
+
+    if len(fine_test_dataset.tolist()) > 0:
+        coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
 
     fine_nb = len(fine_test_loader)
     coarse_nb = len(coarse_test_loader)
