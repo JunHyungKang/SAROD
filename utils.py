@@ -332,7 +332,7 @@ def compute_map(fine_result, coarse_result):
         for result in coarse_result:
             final_stats.append(result[6])
 
-    final_stats = [np.concatenate(x, 0) for x in zip(final_stats)]
+    final_stats = [np.concatenate(x, 0) for x in zip(*final_stats)]
 
     p, r, ap, f1, ap_class = ap_per_class(*zip(final_stats))
     p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
