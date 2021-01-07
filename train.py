@@ -110,26 +110,21 @@ if __name__ == '__main__':
 
     # Testing
     fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path)
+    fine_results, coarse_results = [], []
 
-    fine_test_dataset = load_dataset(fine_dataset, fine_tr, bs)
-    coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+    if len(fine_dataset.tolist()) > 0:
+        fine_test_dataset = load_dataset(fine_dataset, fine_tr, bs)
+        fine_test_loader = load_dataloader(bs, fine_test_dataset)
+        fine_nb = len(fine_test_loader)
+        for i, fine_test in tqdm.tqdm(enumerate(fine_test_loader), total=fine_nb):
+            fine_results.append(fine_detector.eval(fine_test))
 
-    # if len(fine_test_dataset.tolist()) > 0:
-    #     fine_test_loader = load_dataloader(bs, fine_test_dataset)
-    #
-    #
-    # if len(fine_test_dataset.tolist()) > 0:
-    #     coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
-    #
-    # fine_nb = len(fine_test_loader)
-    # coarse_nb = len(coarse_test_loader)
-    #
-    # fine_results, coarse_results = [], []
-    # for i, fine_test in tqdm.tqdm(enumerate(fine_test_loader), total=fine_nb):
-    #     fine_results.append(fine_detector.eval(fine_test))
-    #
-    # for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
-    #     coarse_results.append(coarse_detector.eval(coarse_test))
-    #
-    # map50 = compute_map(fine_results, coarse_results)
-    # print('MAP: \n', map50)
+    if len(coarse_dataset.tolist()) > 0:
+        coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+        coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
+        coarse_nb = len(coarse_test_loader)
+        for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
+            coarse_results.append(coarse_detector.eval(coarse_test))
+
+    map50 = compute_map(fine_results, coarse_results)
+    print('MAP: \n', map50)
