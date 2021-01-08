@@ -595,9 +595,12 @@ class yolov5():
                 # Statistics per image
                 self.results = []
                 for si, pred in enumerate(output):
+                    # print('targets: \n', targets)
                     labels = targets[targets[:, 0] == si, 1:]
+                    # print('labels: \n', labels)
                     nl = len(labels)
                     tcls = labels[:, 0].tolist() if nl else []  # target class
+                    # print('tcls: \n', tcls)
                     seen += 1
 
                     if pred is None:

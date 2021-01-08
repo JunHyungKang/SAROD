@@ -49,12 +49,12 @@ if __name__ == '__main__':
     coarse_detector = yolov5(coarse_tr, coarse_eval, epochs, bs)
     rl_agent = EfficientOD(efficient_config)
 
-    split_train_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/test/images'
-    split_val_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/test/images'
-    split_test_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/test/images'
+    split_train_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
+    split_val_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
+    split_test_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
     split = 4
 
-    original_img_path = '/home/SSDD/ICIP21_dataset/origin_data/rl_ver/test/images'
+    original_img_path = '/home/SSDD/ICIP21_dataset/origin_data/rl_ver/sample/images'
 
     assert bs % split == 0, 'batch size should be divided with image split patch size'
 
@@ -63,6 +63,7 @@ if __name__ == '__main__':
         train_imgs = load_filenames(split_train_path, split, bs).files_array()
         fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
         coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
+
 
         fine_train_loader = load_dataloader(bs, fine_train_dataset)
         coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
@@ -88,22 +89,21 @@ if __name__ == '__main__':
             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path)
             fine_results, coarse_results = [], []
 
-            print(len(fine_dataset.tolist()))
-            print(len(coarse_dataset.tolist()))
-
             if len(fine_dataset.tolist()) > 0:
                 fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
                 fine_val_loader = load_dataloader(bs, fine_val_dataset)
                 fine_nb = len(fine_val_loader)
                 for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
-                    fine_results.append(fine_detector.eval(fine_val))
+                    for j in fine_detector.eval(fine_val):
+                        fine_results.append(j)
 
             if len(coarse_dataset.tolist()) > 0:
                 coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
                 coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
                 coarse_nb = len(coarse_train_loader)
                 for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
-                    coarse_results.append(coarse_detector.eval(coarse_val))
+                    for j in coarse_detector.eval(coarse_val):
+                        coarse_results.append(j)
 
             map50 = compute_map(fine_results, coarse_results)
             print('MAP: \n', map50)
@@ -117,14 +117,16 @@ if __name__ == '__main__':
         fine_test_loader = load_dataloader(bs, fine_test_dataset)
         fine_nb = len(fine_test_loader)
         for i, fine_test in tqdm.tqdm(enumerate(fine_test_loader), total=fine_nb):
-            fine_results.append(fine_detector.eval(fine_test))
+            for j in fine_detector.eval(fine_test):
+                fine_results.append(j)
 
     if len(coarse_dataset.tolist()) > 0:
         coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
         coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
         coarse_nb = len(coarse_test_loader)
         for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
-            coarse_results.append(coarse_detector.eval(coarse_test))
+            for j in coarse_detector.eval(coarse_test):
+                coarse_results.append(j)
 
     map50 = compute_map(fine_results, coarse_results)
     print('MAP: \n', map50)
