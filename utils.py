@@ -325,11 +325,11 @@ class load_dataset(Dataset):  # for training/testing
 def compute_map(fine_result, coarse_result):
     final_stats = []
     if len(fine_result) > 0:
-        for result in fine_result:
+        for result in np.concatenate(fine_result):
             final_stats.append(result[6])
 
     if len(coarse_result) > 0:
-        for result in coarse_result:
+        for result in np.concatenate(coarse_result):
             final_stats.append(result[6])
 
     final_stats = [np.concatenate(x, 0) for x in zip(final_stats)]
