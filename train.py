@@ -123,10 +123,10 @@ if __name__ == '__main__':
             print('Validation mAP: \n', map50)
 
             with open('val_result.txt', 'a') as f:
-                f.write(map50)
+                f.write(str(map50))
 
             with open('val_policies.txt', 'a') as f:
-                f.write(policies)
+                f.write(str(policies))
 
     # Testing
     fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
@@ -151,8 +151,8 @@ if __name__ == '__main__':
     map50 = compute_map(fine_results, coarse_results)
     print('MAP: \n', map50)
 
-    with open('test_result.txt', 'a') as f:
-        f.write(map50)
+    with open('val_result.txt', 'a') as f:
+        f.write(str(map50))
 
-    with open('test_policies.txt', 'a') as f:
-        f.write(policies)
+    with open('val_policies.txt', 'a') as f:
+        f.write(str(policies))
