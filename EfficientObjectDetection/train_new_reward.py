@@ -94,7 +94,7 @@ class EfficientOD():
         self.epoch = epoch
         self.result_fine = result_fine
         self.result_coarse = result_coarse
-        self.original_data_path = '/home/SSDD/ICIP21_dataset/origin_data/rl_ver/test'
+        self.original_data_path = '/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train'
 
         transform_train, _ = get_transforms(self.opt['img_size'])
         #

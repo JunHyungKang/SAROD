@@ -13,7 +13,7 @@ from utils import load_filenames, load_dataset, load_dataloader, compute_map
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=100)
+    parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=24, help="Total batch size for all gpus.")
     parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
@@ -49,12 +49,12 @@ if __name__ == '__main__':
     coarse_detector = yolov5(coarse_tr, coarse_eval, epochs, bs)
     rl_agent = EfficientOD(efficient_config)
 
-    split_train_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
-    split_val_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
-    split_test_path = '/home/SSDD/ICIP21_dataset/split_data_4_0/rl_ver/sample/images'
+    split_train_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images'
+    split_val_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images'
+    split_test_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images'
     split = 4
 
-    original_img_path = '/home/SSDD/ICIP21_dataset/origin_data/rl_ver/sample/images'
+    original_img_path = '/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images'
 
     assert bs % split == 0, 'batch size should be divided with image split patch size'
 
@@ -85,7 +85,7 @@ if __name__ == '__main__':
             rl_agent.train(e, i, nb, fine_results, coarse_results)
 
         # Validation
-        if e % 10 == 0:
+        if e % 1 == 0:
             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path)
             fine_results, coarse_results = [], []
 
