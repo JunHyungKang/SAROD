@@ -670,13 +670,14 @@ class yolov5():
 
                     # Append statistics (correct, conf, pcls, tcls)
                     # stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
-                    # stats = (correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)
+                    stats = [(correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)]
                     # print(np.array(tcls).shape)
-                    stats = np.array([np.array(correct.cpu()),
-                                      np.array(pred[:, 4].cpu()),
-                                      np.array(pred[:, 5].cpu()),
-                                      np.array(tcls)])
+                    # stats = np.array([np.array(correct.cpu()),
+                    #                   np.array(pred[:, 4].cpu()),
+                    #                   np.array(pred[:, 5].cpu()),
+                    #                   np.array(tcls)])
 
+                    stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
                     # stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
 
                     if len(stats) and stats[0].any():
