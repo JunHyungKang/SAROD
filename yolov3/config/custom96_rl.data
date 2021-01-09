@@ -1,0 +1,4 @@
+classes=1
+valid=data/custom96/valid_rl.txt
+test=data/custom96/train_rl.txt
+names=data/custom96/classes.names

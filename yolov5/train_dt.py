@@ -679,9 +679,6 @@ class yolov5():
 
                     # stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
 
-                    # print('\nstats[0].any()', stats[0])
-                    # print('\nlen(stats) and stats[0].any()', len(stats) and stats[0].any())
-
                     if len(stats) and stats[0].any():
                         p, r, ap, f1, ap_class = ap_per_class(*stats)
                         p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
@@ -830,95 +827,3 @@ class yolov5():
                                      single_cls=self.opt.single_cls)
 
         return results
-
-    # def main(self, epochs):
-    #     self.last = get_latest_run() if self.opt.resume == 'get_last' else self.opt.resume  # resume from most recent run
-    #     if self.last and not self.opt.weights:
-    #         print(f'Resuming training from {self.last}')
-    #     self.opt.weights = self.last if self.opt.resume and not self.opt.weights else self.opt.weights
-    #     if self.opt.local_rank in [-1, 0]:
-    #         check_git_status()
-    #     self.opt.cfg = check_file(self.opt.cfg)  # check file
-    #     self.opt.data = check_file(self.opt.data)  # check file
-    #     if self.opt.hyp:  # update hyps
-    #         self.opt.hyp = check_file(self.opt.hyp)  # check file
-    #         with open(self.opt.hyp) as f:
-    #             self.hyp.update(yaml.load(f, Loader=yaml.FullLoader))  # update hyps
-    #     self.opt.img_size.extend([self.opt.img_size[-1]] * (2 - len(self.opt.img_size)))  # extend to 2 sizes (train, test)
-    #     self.device = torch_utils.select_device(self.opt.device, apex=False, batch_size=self.opt.batch_size)
-    #     self.opt.total_batch_size = self.opt.batch_size
-    #     self.opt.world_size = 1
-    #     if self.device.type == 'cpu':
-    #         mixed_precision = False
-    #     elif self.opt.local_rank != -1:
-    #         # DDP mode
-    #         assert torch.cuda.device_count() > self.opt.local_rank
-    #         torch.cuda.set_device(self.opt.local_rank)
-    #         self.device = torch.device("cuda", self.opt.local_rank)
-    #         dist.init_process_group(backend='nccl', init_method='env://')  # distributed backend
-    #
-    #         self.opt.world_size = dist.get_world_size()
-    #         assert self.opt.batch_size % self.opt.world_size == 0, "Batch size is not a multiple of the number of devices given!"
-    #         self.opt.batch_size = self.opt.total_batch_size // self.opt.world_size
-    #     # print(self.opt)
-    #
-    #     # Train
-    #     if not self.opt.evolve:
-    #         if self.opt.local_rank in [-1, 0]:
-    #             # print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-    #             self.tb_writer = SummaryWriter(log_dir=increment_dir('runs/exp', self.opt.name))
-    #         else:
-    #             self.tb_writer = None
-    #         self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
-    #
-    #     # Evolve hyperparameters (optional)
-    #     else:
-    #         assert self.opt.local_rank == -1, "DDP mode currently not implemented for Evolve!"
-    #
-    #         self.tb_writer = None
-    #         self.opt.notest, self.opt.nosave = True, True  # only test/save final epoch
-    #         if self.opt.bucket:
-    #             os.system('gsutil cp gs://%s/evolve.txt .' % self.opt.bucket)  # download evolve.txt if exists
-    #
-    #         for _ in range(10):  # generations to evolve
-    #             if os.path.exists('evolve.txt'):  # if evolve.txt exists: select best hyps and mutate
-    #                 # Select parent(s)
-    #                 parent = 'single'  # parent selection method: 'single' or 'weighted'
-    #                 x = np.loadtxt('evolve.txt', ndmin=2)
-    #                 n = min(5, len(x))  # number of previous results to consider
-    #                 x = x[np.argsort(-fitness(x))][:n]  # top n mutations
-    #                 w = fitness(x) - fitness(x).min()  # weights
-    #                 if parent == 'single' or len(x) == 1:
-    #                     # x = x[random.randint(0, n - 1)]  # random selection
-    #                     x = x[random.choices(range(n), weights=w)[0]]  # weighted selection
-    #                 elif parent == 'weighted':
-    #                     x = (x * w.reshape(n, 1)).sum(0) / w.sum()  # weighted combination
-    #
-    #                 # Mutate
-    #                 mp, s = 0.9, 0.2  # mutation probability, sigma
-    #                 npr = np.random
-    #                 npr.seed(int(time.time()))
-    #                 g = np.array([1, 1, 1, 1, 1, 1, 1, 0, .1, 1, 0, 1, 1, 1, 1, 1, 1, 1])  # gains
-    #                 ng = len(g)
-    #                 v = np.ones(ng)
-    #                 while all(v == 1):  # mutate until a change occurs (prevent duplicates)
-    #                     v = (g * (npr.random(ng) < mp) * npr.randn(ng) * npr.random() * s + 1).clip(0.3, 3.0)
-    #                 for i, k in enumerate(self.hyp.keys()):  # plt.hist(v.ravel(), 300)
-    #                     self.hyp[k] = x[i + 7] * v[i]  # mutate
-    #
-    #             # Clip to limits
-    #             keys = ['lr0', 'iou_t', 'momentum', 'weight_decay', 'hsv_s', 'hsv_v', 'translate', 'scale', 'fl_gamma']
-    #             limits = [(1e-5, 1e-2), (0.00, 0.70), (0.60, 0.98), (0, 0.001), (0, .9), (0, .9), (0, .9), (0, .9),
-    #                       (0, 3)]
-    #             for k, v in zip(keys, limits):
-    #                 self.hyp[k] = np.clip(self.hyp[k], v[0], v[1])
-    #
-    #             # Train mutation
-    #             # results = self.load_model(self.device, self.tb_writer, epochs)
-    #             self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
-    #
-    #             # Write mutation results
-    #             # print_mutation(self.hyp, results, self.opt.bucket)
-    #
-    #             # Plot results
-    #             # plot_evolution_results(hyp)

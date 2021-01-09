@@ -89,19 +89,14 @@ class EfficientOD():
         self.optimizer_agent = optim.Adam(self.agent.parameters(), lr=float(self.opt['lr']))
         self.optimizer_critic = optim.Adam(self.agent.parameters(), lr=float(self.opt['lr']))
 
-    def train(self, epoch, batch_iter, nb, result_fine, result_coarse):
+    def train(self, epoch, batch_iter, nb, result_fine, result_coarse, original_data_path):
         # Start training and testing
         self.epoch = epoch
         self.result_fine = result_fine
         self.result_coarse = result_coarse
-        self.original_data_path = '/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train'
+        self.original_data_path = original_data_path
 
         transform_train, _ = get_transforms(self.opt['img_size'])
-        #
-        # trainset = utils_ete.get_dataset(self.opt['img_size'], self.result_fine, self.result_coarse, 'train',
-        #                                  self.original_data_path)
-        # trainloader = torchdata.DataLoader(trainset, batch_size=self.opt['batch_size'], shuffle=True,
-        #                                    num_workers=self.opt['num_workers'])
 
         p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
         # for epoch in range(self.epoch, self.epoch + 1):
@@ -114,7 +109,7 @@ class EfficientOD():
         # ressults = (source_path, paths[si], mp, mr, map50, nl, stats)
         for i in range(int(len(result_fine)/self.opt['split'])):
             f_ap, c_ap, f_ob, c_ob, f_stats, c_stats = [], [], [], [], [], []
-            img_path = os.path.join(self.original_data_path, 'images', result_fine[i][0] + '.png')
+            img_path = os.path.join(self.original_data_path, result_fine[i][0] + '.png')
             img_as_img = Image.open(img_path)
             img_as_tensor = transform_train(img_as_img)
             for j in range(self.opt['split']):
@@ -127,12 +122,6 @@ class EfficientOD():
                 f_stats.append(result_fine[i * self.opt['split'] + j][6])
                 c_stats.append(result_coarse[i * self.opt['split'] + j][6])
 
-
-            # f_ap = torch.cat(f_ap, dim=0).view([-1, 4])
-            # c_ap = torch.cat(c_ap, dim=0).view([-1, 4])
-            #
-            # f_ob = torch.cat(f_ob, dim=0).view([-1, 4])
-            # c_ob = torch.cat(c_ob, dim=0).view([-1, 4])
             self.buffer.append([img_as_tensor.numpy(), f_ap, c_ap, f_stats, c_stats, f_ob, c_ob])
 
         if len(self.buffer) >= 10:
@@ -163,15 +152,6 @@ class EfficientOD():
                 policy_map[policy_map < 0.5] = 0.0
                 policy_map[policy_map >= 0.5] = 1.0
                 policy_map = Variable(policy_map)
-
-                # Get the batch wise metrics
-                # f_p, c_p, f_r, c_r, f_ap, c_ap, f_loss, c_loss, f_ob, c_ob, f_stats, c_stats
-
-                # Find the reward for baseline and sampled policy
-                # f_ap = [np.concatenate(x, axis=0) for x in zip(*f_ap)]
-                # c_ap = [np.concatenate(x, axis=0) for x in zip(*c_ap)]
-                # f_ob = [np.concatenate(x, axis=0) for x in zip(*f_ob)]
-                # c_ob = [np.concatenate(x, axis=0) for x in zip(*c_ob)]
 
                 f_ap = torch.from_numpy(np.array(f_ap).reshape((-1, 4)))
                 c_ap = torch.from_numpy(np.array(c_ap).reshape((-1, 4)))

@@ -28,6 +28,19 @@ if __name__ == '__main__':
     parser.add_argument('--coarse_tr', default='config/coarse_tr.yaml')
     parser.add_argument('--coarse_eval', default='config/coarse_eval.yaml')
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
+    parser.add_argument('--split', default=4)
+    parser.add_argument('--split_train_path',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images')
+    parser.add_argument('--split_val_path',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images')
+    parser.add_argument('--split_test_path',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images')
+    parser.add_argument('--original_img_path_train',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train/images')
+    parser.add_argument('--original_img_path_val',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/val/images')
+    parser.add_argument('--original_img_path_test',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images')
     opt = parser.parse_args()
 
     # training option load from yaml files
@@ -49,12 +62,14 @@ if __name__ == '__main__':
     coarse_detector = yolov5(coarse_tr, coarse_eval, epochs, bs)
     rl_agent = EfficientOD(efficient_config)
 
-    split_train_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images'
-    split_val_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images'
-    split_test_path = '/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images'
-    split = 4
+    split_train_path = opt.split_train_path
+    split_val_path = opt.split_val_path
+    split_test_path = opt.split_test_path
+    split = opt.split
 
-    original_img_path = '/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images'
+    original_img_path_train = opt.original_img_path_train
+    original_img_path_val = opt.original_img_path_val
+    original_img_path_test = opt.original_img_path_test
 
     assert bs % split == 0, 'batch size should be divided with image split patch size'
 
@@ -63,7 +78,6 @@ if __name__ == '__main__':
         train_imgs = load_filenames(split_train_path, split, bs).files_array()
         fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
         coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
-
 
         fine_train_loader = load_dataloader(bs, fine_train_dataset)
         coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
@@ -82,11 +96,11 @@ if __name__ == '__main__':
             fine_results = fine_detector.eval(fine_train)
             coarse_results = coarse_detector.eval(coarse_train)
 
-            rl_agent.train(e, i, nb, fine_results, coarse_results)
+            rl_agent.train(e, i, nb, fine_results, coarse_results, original_img_path_train)
 
         # Validation
         if e % 1 == 0:
-            fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path)
+            fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path_val)
             fine_results, coarse_results = [], []
 
             if len(fine_dataset.tolist()) > 0:
@@ -106,10 +120,16 @@ if __name__ == '__main__':
                         coarse_results.append(j)
 
             map50 = compute_map(fine_results, coarse_results)
-            print('MAP: \n', map50)
+            print('Validation mAP: \n', map50)
+
+            with open('val_result.txt', 'a') as f:
+                f.write(map50)
+
+            with open('val_policies.txt', 'a') as f:
+                f.write(policies)
 
     # Testing
-    fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path)
+    fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
     fine_results, coarse_results = [], []
 
     if len(fine_dataset.tolist()) > 0:
@@ -130,3 +150,9 @@ if __name__ == '__main__':
 
     map50 = compute_map(fine_results, coarse_results)
     print('MAP: \n', map50)
+
+    with open('test_result.txt', 'a') as f:
+        f.write(map50)
+
+    with open('test_policies.txt', 'a') as f:
+        f.write(policies)
