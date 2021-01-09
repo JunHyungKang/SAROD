@@ -339,3 +339,96 @@ def compute_map(fine_result, coarse_result):
     mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
 
     return map50
+
+def yolo2coco(tensors, org_res):
+    # cx, cy, w, h --> x0, y0, x1, y2
+    cx, cy, w, h = tensors[0], tensors[1], tensors[2], tensors[3]
+    x0, y0, x1, y2 = (cx-(w/2))*org_res, (cy-(h/2))*org_res, (cx+(w/2))*org_res, (cy+(h/2))*org_res
+    return torch.Tensor([[x0, y0, x1, y2]]).type(torch.int64)
+
+def convert_yolo2coco(targets, save_dict, org_res=480):
+    '''
+    # inputs
+        targets: (idx, cls, bb_info)
+        save_dict: result dictionary {'image_id', 'labels', 'boxes'}
+        org_res: original resolution
+    # returns
+        save_dict
+    # function:
+        convert tensor (yolo format) to dictionary (COCO format)
+    '''
+    # not first
+    if save_dict:
+        save_dict['labels'] = torch.cat([save_dict['labels'], targets[1].unsqueeze(0).type(torch.int64)])
+        save_dict['boxes'] = torch.cat([save_dict['boxes'], yolo2coco(targets[2:], org_res)])
+    # first
+    else:
+        save_dict['image_id'] = targets[0].unsqueeze(0).type(torch.int64)
+        save_dict['labels'] = targets[1].unsqueeze(0).type(torch.int64)
+        save_dict['boxes'] = yolo2coco(targets[2:], org_res)
+    return save_dict
+
+def label2idx(labels):
+    label_dict = {}
+    for idx, label in enumerate(labels):
+        label_dict[label] = idx
+    length = len(labels)
+    return length, label_dict
+
+def label_matching(dataset):
+    '''
+    # inputs: 
+        dataset (img, target, path, info)
+    # outputs: 
+        img, label
+    # function: 
+        label이 있는 image set만 matching return
+    '''
+    imgs = dataset[0]
+    labels = dataset[1]
+    
+    # label length
+#     length = len(np.unique(labels[:,0]))
+    length, label_dict = label2idx(np.unique(labels[:,0]))
+    
+    # create dummy list
+    # img --> tensor
+    # label --> list[(dict)]
+    data_label = [{} for _ in range(length)]
+    data_img = []
+    
+    for l in labels:
+        # length = 6 (index, cls, cx, cy, w, h)
+        idx = label_dict[int(l[0])]
+        if not data_label[idx]:
+            data_img.append(imgs[idx])
+        # convert label
+        data_label[idx] = convert_yolo2coco(l, data_label[idx], org_res=imgs.shape[0])
+    return torch.stack(data_img), data_label
+
+def reduce_dict(input_dict, average=True):
+    # ref: https://github.com/pytorch/vision/blob/3711754a508e429d0049df3c4a410c4cde08e4e6/references/detection/utils.py#L118
+    """
+    Args:
+        input_dict (dict): all the values will be reduced
+        average (bool): whether to do average or sum
+    Reduce the values in the dictionary from all processes so that all processes
+    have the averaged results. Returns a dict with the same fields as
+    input_dict, after reduction.
+    """
+    world_size = get_world_size()
+    if world_size < 2:
+        return input_dict
+    with torch.no_grad():
+        names = []
+        values = []
+        # sort the keys so that they are consistent across processes
+        for k in sorted(input_dict.keys()):
+            names.append(k)
+            values.append(input_dict[k])
+        values = torch.stack(values, dim=0)
+        dist.all_reduce(values)
+        if average:
+            values /= world_size
+        reduced_dict = {k: v for k, v in zip(names, values)}
+    return reduced_dict
