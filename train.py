@@ -16,7 +16,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=10)
     parser.add_argument('--batch_size', type=int, default=24, help="Total batch size for all gpus.")
-    parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
     parser.add_argument('--eval_epoch', type=int, default=1)
     parser.add_argument('--step_batch_size', type=int, default=100)
@@ -31,15 +31,15 @@ if __name__ == '__main__':
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
     parser.add_argument('--split', default=4)
     parser.add_argument('--split_train_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/sample/images')
-    parser.add_argument('--split_val_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images')
+    parser.add_argument('--split_val_path',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images')
     parser.add_argument('--split_test_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images')
     parser.add_argument('--original_img_path_train',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/sample/images')
-    parser.add_argument('--original_img_path_val',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train/images')
+    parser.add_argument('--original_img_path_val',
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/val/images')
     parser.add_argument('--original_img_path_test',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images')
     opt = parser.parse_args()
@@ -75,15 +75,15 @@ if __name__ == '__main__':
     assert bs % split == 0, 'batch size should be divided with image split patch size'
 
     # Training
+    train_imgs = load_filenames(split_train_path, split, bs).files_array()
+    fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
+    coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
+
+    fine_train_loader = load_dataloader(bs, fine_train_dataset)
+    coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
+
     for e in range(epochs):
         print('Starting training for %g epochs...' % e)
-        train_imgs = load_filenames(split_train_path, split, bs).files_array()
-        fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
-        coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
-
-        fine_train_loader = load_dataloader(bs, fine_train_dataset)
-        coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
-
         fine_train_nb = len(fine_train_loader)
         coarse_train_nb = len(coarse_train_loader)
         assert fine_train_nb == coarse_train_nb, 'fine & coarse train batch number is not matched'

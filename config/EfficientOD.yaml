@@ -1,4 +1,4 @@
-gpu_id: 2
+gpu_id: 0
 lr: 1e-3
 cv_dir: opt.save_path
 batch_size: 24
