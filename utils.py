@@ -11,7 +11,7 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image, ExifTags
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, SubsetRandomSampler, SequentialSampler
 from tqdm import tqdm
 
 from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class
@@ -42,14 +42,25 @@ def load_image(self, index):
 def load_dataloader(batch_size, dataset):
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // 1, batch_size if batch_size > 1 else 0, 8])  # number of workers
-    train_sampler = None
+    sampler_list = []
+    temp = list(range(batch_size))
+    np.random.shuffle(temp)
+    for i in temp:
+        sampler_list.append(i + 0)
+        sampler_list.append(i + 1)
+        sampler_list.append(i + 2)
+        sampler_list.append(i + 3)
+
+    train_sampler = SequentialSampler(sampler_list)
+
     dataloader = torch.utils.data.DataLoader(dataset,
                                              batch_size=batch_size,
                                              num_workers=nw,
                                              sampler=train_sampler,
                                              shuffle=False,
                                              pin_memory=True,
-                                             collate_fn=load_dataset.collate_fn)
+                                             collate_fn=load_dataset.collate_fn,
+                                             drop_last=True)
     return dataloader
 
 

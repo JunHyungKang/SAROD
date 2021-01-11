@@ -84,6 +84,7 @@ if __name__ == '__main__':
 
     for e in range(epochs):
         print('Starting training for %g epochs...' % e)
+
         fine_train_nb = len(fine_train_loader)
         coarse_train_nb = len(coarse_train_loader)
         assert fine_train_nb == coarse_train_nb, 'fine & coarse train batch number is not matched'

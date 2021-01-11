@@ -104,8 +104,8 @@ class EfficientOD():
         if batch_iter == 0:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
-        print('len(result_fine): \n', len(result_fine))
-        print('len(result_coarse): \n', len(result_coarse))
+        # print('len(result_fine): \n', len(result_fine))
+        # print('len(result_coarse): \n', len(result_coarse))
         assert len(result_fine)==len(result_coarse), 'result data size is different between fine & coarse'
 
         # ressults = (source_path, paths[si], mp, mr, map50, nl, stats)
@@ -127,7 +127,7 @@ class EfficientOD():
             self.buffer.append([img_as_tensor.numpy(), f_ap, c_ap, f_stats, c_stats, f_ob, c_ob])
 
         if len(self.buffer) >= 1000:
-            print('RL training is ongoing! buffer size is more than 1000')
+            # print('RL training is ongoing! buffer size is more than 1000')
             pbar = tqdm.tqdm(range((epoch+1)*6))
             for i in pbar:
                 minibatch = random.sample(self.buffer, self.opt['step_batch_size'])
