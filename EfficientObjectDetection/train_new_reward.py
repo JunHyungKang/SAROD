@@ -104,6 +104,8 @@ class EfficientOD():
         if batch_iter == 0:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
+        print('len(result_fine): \n', len(result_fine))
+        print('len(result_coarse): \n', len(result_coarse))
         assert len(result_fine)==len(result_coarse), 'result data size is different between fine & coarse'
 
         # ressults = (source_path, paths[si], mp, mr, map50, nl, stats)
@@ -124,8 +126,8 @@ class EfficientOD():
 
             self.buffer.append([img_as_tensor.numpy(), f_ap, c_ap, f_stats, c_stats, f_ob, c_ob])
 
-        if len(self.buffer) >= 10:
-            print('RL training is ongoing! buffer size is more than 10')
+        if len(self.buffer) >= 1000:
+            print('RL training is ongoing! buffer size is more than 1000')
             pbar = tqdm.tqdm(range((epoch+1)*6))
             for i in pbar:
                 minibatch = random.sample(self.buffer, self.opt['step_batch_size'])
@@ -196,6 +198,9 @@ class EfficientOD():
                             self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
                                 # self.stats_list.append((torch.squeeze(stats[0], 0), torch.squeeze(stats[1], 0), torch.squeeze(stats[2], 0), stats[3]))
 
+            print('RL batch_iter: \n', batch_iter)
+            print('RL nb: \n', nb)
+
             if batch_iter == nb:
                 print('RL training progress: % from total %'.format(batch_iter, nb))
                 cal_stats_list = [np.concatenate(x, 0) for x in zip(*self.stats_list)]
@@ -215,14 +220,14 @@ class EfficientOD():
                     f.write(str(result) + '\n')
 
                 # save the model --- agent
-                agent_state_dict = self.agent.module.state_dict() if self.opt.parallel else self.agent.state_dict()
+                agent_state_dict = self.agent.module.state_dict() if self.opt['parallel'] else self.agent.state_dict()
                 state = {
                     'agent': agent_state_dict,
                     'epoch': self.epoch,
                     'reward': reward,
                 }
-                if self.epoch % 10 == 0:
-                    torch.save(state, self.opt.cv_dir + '/ckpt_E_{}'.format(self.epoch))
+
+                torch.save(state, self.opt['cv_dir'] + '/ckpt_E_{}'.format(self.epoch))
 
     def eval(self, split_val_path, original_img_path):
 
@@ -255,6 +260,7 @@ class EfficientOD():
             for i, policy in enumerate(policy.cpu().data):
                 for j, policy_element in enumerate(policy):
                     efficiency.append(policy_element)
+
                     if policy_element == 0:
                         if j ==0:
                             coarse_dataset.append(

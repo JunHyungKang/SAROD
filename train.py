@@ -6,6 +6,7 @@ import argparse
 import torch
 import tqdm
 import numpy as np
+import time
 
 from yolov5.train_dt import yolov5
 from EfficientObjectDetection.train_new_reward import EfficientOD
@@ -30,15 +31,15 @@ if __name__ == '__main__':
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
     parser.add_argument('--split', default=4)
     parser.add_argument('--split_train_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/sample/images')
     parser.add_argument('--split_val_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images')
     parser.add_argument('--split_test_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images')
     parser.add_argument('--original_img_path_train',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/sample/images')
     parser.add_argument('--original_img_path_val',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/val/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train/images')
     parser.add_argument('--original_img_path_test',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images')
     opt = parser.parse_args()
@@ -75,6 +76,7 @@ if __name__ == '__main__':
 
     # Training
     for e in range(epochs):
+        print('Starting training for %g epochs...' % e)
         train_imgs = load_filenames(split_train_path, split, bs).files_array()
         fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
         coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
@@ -100,9 +102,10 @@ if __name__ == '__main__':
 
         # Validation
         if e % 1 == 0:
+
             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path_val)
             fine_results, coarse_results = [], []
-
+            s_time = time.time()
             if len(fine_dataset.tolist()) > 0:
                 fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
                 fine_val_loader = load_dataloader(bs, fine_val_dataset)
@@ -111,6 +114,7 @@ if __name__ == '__main__':
                     for j in fine_detector.eval(fine_val):
                         fine_results.append(j)
 
+            print('len(coarse_dataset.tolist()): \n', len(coarse_dataset.tolist()))
             if len(coarse_dataset.tolist()) > 0:
                 coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
                 coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
@@ -121,6 +125,7 @@ if __name__ == '__main__':
 
             map50 = compute_map(fine_results, coarse_results)
             print('Validation mAP: \n', map50)
+            print('Time for validation: \n', time.time() - s_time)
 
             with open('val_result.txt', 'a') as f:
                 f.write(str(map50))

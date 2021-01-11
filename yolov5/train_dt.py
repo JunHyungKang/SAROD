@@ -338,9 +338,9 @@ class yolov5():
         self.scheduler.last_epoch = self.start_epoch - 1  # do not move
 
         t0 = time.time()
-        if rank in [0, -1]:
-            print('Image sizes %g train, %g test' % (self.imgsz, self.imgsz_test))
-            print('Starting training for %g epochs...' % epoch)
+        # if rank in [0, -1]:
+        #     print('Image sizes %g train, %g test' % (self.imgsz, self.imgsz_test))
+        #     print('Starting training for %g epochs...' % epoch)
         # torch.autograd.set_detect_anomaly(True)
 
         ##########################################################################################################
@@ -595,12 +595,9 @@ class yolov5():
                 # Statistics per image
                 self.results = []
                 for si, pred in enumerate(output):
-                    # print('targets: \n', targets)
                     labels = targets[targets[:, 0] == si, 1:]
-                    # print('labels: \n', labels)
                     nl = len(labels)
                     tcls = labels[:, 0].tolist() if nl else []  # target class
-                    # print('tcls: \n', tcls)
                     seen += 1
 
                     if pred is None:
@@ -671,14 +668,8 @@ class yolov5():
                     # Append statistics (correct, conf, pcls, tcls)
                     # stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
                     stats = [(correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)]
-                    # print(np.array(tcls).shape)
-                    # stats = np.array([np.array(correct.cpu()),
-                    #                   np.array(pred[:, 4].cpu()),
-                    #                   np.array(pred[:, 5].cpu()),
-                    #                   np.array(tcls)])
 
                     stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
-                    # stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
 
                     if len(stats) and stats[0].any():
                         p, r, ap, f1, ap_class = ap_per_class(*stats)
