@@ -4,17 +4,26 @@ import os
 import random
 import shutil
 import time
+import pickle
+import datetime
 from pathlib import Path
 from threading import Thread
+from collections import defaultdict, deque
 
 import cv2
 import numpy as np
 import torch
+import torch.distributed as dist
+
+import errno
+
 from PIL import Image, ExifTags
 from torch.utils.data import Dataset
 from tqdm import tqdm
+import copy
 
 from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class
+
 
 # Get orientation exif tag
 for orientation in ExifTags.TAGS.keys():
@@ -341,13 +350,23 @@ def compute_map(fine_result, coarse_result):
 
     return map50
 
-def yolo2coco(tensors, org_res):
+def yolo2coco(tensors, org_res, device):
     # cx, cy, w, h --> x0, y0, x1, y2
+    # zero / max
+    # must be x0 < x1, y0 < y1 --> if not, inf loss
+    tensors *= org_res
     cx, cy, w, h = tensors[0], tensors[1], tensors[2], tensors[3]
-    x0, y0, x1, y2 = (cx-(w/2))*org_res, (cy-(h/2))*org_res, (cx+(w/2))*org_res, (cy+(h/2))*org_res
-    return torch.Tensor([[x0, y0, x1, y2]]).type(torch.int64)
+    x0, y0 = int(max(0, min(cx-(w/2), org_res))), int(max(0, min(cy-(h/2), org_res)))
+    x1, y1 = int(max(0, min(x0+w, org_res))), int(max(0, min(y0+h, org_res)))
+    x0, y0, x1, y1 = min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)
+    if x0 == x1:
+        x1 += 1
+    if y0 == y1:
+        y1 += 1
+    tensor = torch.Tensor([[x0, y0, x1, y1]]).to(device).clone()
+    return tensor
 
-def convert_yolo2coco(targets, save_dict, org_res=480):
+def convert_yolo2coco(targets, save_dict, org_res=480, device='cuda'):
     '''
     # inputs
         targets: (idx, cls, bb_info)
@@ -360,13 +379,13 @@ def convert_yolo2coco(targets, save_dict, org_res=480):
     '''
     # not first
     if save_dict:
-        save_dict['labels'] = torch.cat([save_dict['labels'], targets[1].unsqueeze(0).type(torch.int64)])
-        save_dict['boxes'] = torch.cat([save_dict['boxes'], yolo2coco(targets[2:], org_res)])
+        save_dict['labels'] = torch.cat([save_dict['labels'].to(device), targets[1].unsqueeze(0).type(torch.int64).to(device) + 1]) # label = 1
+        save_dict['boxes'] = torch.cat([save_dict['boxes'].to(device), yolo2coco(targets[2:], org_res, device)])
     # first
     else:
-        save_dict['image_id'] = targets[0].unsqueeze(0).type(torch.int64)
-        save_dict['labels'] = targets[1].unsqueeze(0).type(torch.int64)
-        save_dict['boxes'] = yolo2coco(targets[2:], org_res)
+#         save_dict['image_id'] = targets[0].unsqueeze(0).type(torch.int64).to(device)
+        save_dict['labels'] = targets[1].unsqueeze(0).type(torch.int64).to(device) + 1 # label = 1
+        save_dict['boxes'] = yolo2coco(targets[2:], org_res, device)
     return save_dict
 
 def label2idx(labels):
@@ -376,35 +395,38 @@ def label2idx(labels):
     length = len(labels)
     return length, label_dict
 
-def label_matching(dataset):
+def label_matching(dataset, device='cuda'):
     '''
-    # inputs: 
+    # inputs:
         dataset (img, target, path, info)
-    # outputs: 
+    # outputs:
         img, label
-    # function: 
+    # function:
         label이 있는 image set만 matching return
     '''
     imgs = dataset[0]
     labels = dataset[1]
     
     # label length
-#     length = len(np.unique(labels[:,0]))
+#     length = len(np.unique(labels[:,0]))\
+    # img label : dictionary label matching
+    # {key=org_label:value=item_label}
     length, label_dict = label2idx(np.unique(labels[:,0]))
     
     # create dummy list
     # img --> tensor
     # label --> list[(dict)]
-    data_label = [{} for _ in range(length)]
+    data_label = [{} for _ in range(length)] # approach by item_idx 0,1,2,3...
     data_img = []
     
     for l in labels:
         # length = 6 (index, cls, cx, cy, w, h)
-        idx = label_dict[int(l[0])]
-        if not data_label[idx]:
-            data_img.append(imgs[idx])
+        item_idx = label_dict[int(l[0])] # apporach by item_idx 0,1,2,3...
+        org_idx = int(l[0]) # apporach by org_idx (label idx)
+        if not data_label[item_idx]:
+            data_img.append(imgs[org_idx])
         # convert label
-        data_label[idx] = convert_yolo2coco(l, data_label[idx], org_res=imgs.shape[0])
+        data_label[item_idx] = convert_yolo2coco(l, data_label[item_idx], org_res=imgs.shape[-1], device=device)
     return torch.stack(data_img), data_label
 
 def reduce_dict(input_dict, average=True):
@@ -433,3 +455,179 @@ def reduce_dict(input_dict, average=True):
             values /= world_size
         reduced_dict = {k: v for k, v in zip(names, values)}
     return reduced_dict
+
+def get_world_size():
+    if not is_dist_avail_and_initialized():
+        return 1
+    return dist.get_world_size()
+
+def is_dist_avail_and_initialized():
+    if not dist.is_available():
+        return False
+    if not dist.is_initialized():
+        return False
+    return True
+
+def warmup_lr_scheduler(optimizer, warmup_iters, warmup_factor):
+    # https://github.com/pytorch/vision/blob/3711754a508e429d0049df3c4a410c4cde08e4e6/references/detection/utils.py#L239
+    def f(x):
+        if x >= warmup_iters:
+            return 1
+        alpha = float(x) / warmup_iters
+        return warmup_factor * (1 - alpha) + alpha
+
+    return torch.optim.lr_scheduler.LambdaLR(optimizer, f)
+
+
+class MetricLogger(object):
+    # https://github.com/pytorch/vision/blob/3711754a508e429d0049df3c4a410c4cde08e4e6/references/detection/utils.py
+    def __init__(self, delimiter="\t"):
+        self.meters = defaultdict(SmoothedValue)
+        self.delimiter = delimiter
+
+    def update(self, **kwargs):
+        for k, v in kwargs.items():
+            if isinstance(v, torch.Tensor):
+                v = v.item()
+            assert isinstance(v, (float, int))
+            self.meters[k].update(v)
+
+    def __getattr__(self, attr):
+        if attr in self.meters:
+            return self.meters[attr]
+        if attr in self.__dict__:
+            return self.__dict__[attr]
+        raise AttributeError("'{}' object has no attribute '{}'".format(
+            type(self).__name__, attr))
+
+    def __str__(self):
+        loss_str = []
+        for name, meter in self.meters.items():
+            loss_str.append(
+                "{}: {}".format(name, str(meter))
+            )
+        return self.delimiter.join(loss_str)
+
+    def synchronize_between_processes(self):
+        for meter in self.meters.values():
+            meter.synchronize_between_processes()
+
+    def add_meter(self, name, meter):
+        self.meters[name] = meter
+
+    def log_every(self, iterable, print_freq, header=None):
+        i = 0
+        if not header:
+            header = ''
+        start_time = time.time()
+        end = time.time()
+        iter_time = SmoothedValue(fmt='{avg:.4f}')
+        data_time = SmoothedValue(fmt='{avg:.4f}')
+        space_fmt = ':' + str(len(str(len(iterable)))) + 'd'
+        if torch.cuda.is_available():
+            log_msg = self.delimiter.join([
+                header,
+                '[{0' + space_fmt + '}/{1}]',
+                'eta: {eta}',
+                '{meters}',
+                'time: {time}',
+                'data: {data}',
+                'max mem: {memory:.0f}'
+            ])
+        else:
+            log_msg = self.delimiter.join([
+                header,
+                '[{0' + space_fmt + '}/{1}]',
+                'eta: {eta}',
+                '{meters}',
+                'time: {time}',
+                'data: {data}'
+            ])
+        MB = 1024.0 * 1024.0
+        for obj in iterable:
+            data_time.update(time.time() - end)
+            yield obj
+            iter_time.update(time.time() - end)
+            if i % print_freq == 0 or i == len(iterable) - 1:
+                eta_seconds = iter_time.global_avg * (len(iterable) - i)
+                eta_string = str(datetime.timedelta(seconds=int(eta_seconds)))
+                if torch.cuda.is_available():
+                    print(log_msg.format(
+                        i, len(iterable), eta=eta_string,
+                        meters=str(self),
+                        time=str(iter_time), data=str(data_time),
+                        memory=torch.cuda.max_memory_allocated() / MB))
+                else:
+                    print(log_msg.format(
+                        i, len(iterable), eta=eta_string,
+                        meters=str(self),
+                        time=str(iter_time), data=str(data_time)))
+            i += 1
+            end = time.time()
+        total_time = time.time() - start_time
+        total_time_str = str(datetime.timedelta(seconds=int(total_time)))
+        print('{} Total time: {} ({:.4f} s / it)'.format(
+            header, total_time_str, total_time / len(iterable)))
+
+
+class SmoothedValue(object):
+    # https://github.com/pytorch/vision/blob/3711754a508e429d0049df3c4a410c4cde08e4e6/references/detection/utils.py
+    """Track a series of values and provide access to smoothed values over a
+    window or the global series average.
+    """
+
+    def __init__(self, window_size=20, fmt=None):
+        if fmt is None:
+            fmt = "{median:.4f} ({global_avg:.4f})"
+        self.deque = deque(maxlen=window_size)
+        self.total = 0.0
+        self.count = 0
+        self.fmt = fmt
+
+    def update(self, value, n=1):
+        self.deque.append(value)
+        self.count += n
+        self.total += value * n
+
+    def synchronize_between_processes(self):
+        """
+        Warning: does not synchronize the deque!
+        """
+        if not is_dist_avail_and_initialized():
+            return
+        t = torch.tensor([self.count, self.total], dtype=torch.float64, device='cuda')
+        dist.barrier()
+        dist.all_reduce(t)
+        t = t.tolist()
+        self.count = int(t[0])
+        self.total = t[1]
+
+    @property
+    def median(self):
+        d = torch.tensor(list(self.deque))
+        return d.median().item()
+
+    @property
+    def avg(self):
+        d = torch.tensor(list(self.deque), dtype=torch.float32)
+        return d.mean().item()
+
+    @property
+    def global_avg(self):
+        return self.total / self.count
+
+    @property
+    def max(self):
+        return max(self.deque)
+
+    @property
+    def value(self):
+        return self.deque[-1]
+
+    def __str__(self):
+        return self.fmt.format(
+            median=self.median,
+            avg=self.avg,
+            global_avg=self.global_avg,
+            max=self.max,
+            value=self.value)
