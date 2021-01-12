@@ -99,13 +99,11 @@ class EfficientOD():
         transform_train, _ = get_transforms(self.opt['img_size'])
 
         p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-        # for epoch in range(self.epoch, self.epoch + 1):
+
         self.agent.train()
         if batch_iter == 1:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
-        # print('len(result_fine): \n', len(result_fine))
-        # print('len(result_coarse): \n', len(result_coarse))
         assert len(result_fine)==len(result_coarse), 'result data size is different between fine & coarse'
 
         # ressults = (source_path, paths[si], mp, mr, map50, nl, stats)
@@ -172,8 +170,7 @@ class EfficientOD():
                 loss = loss * Variable(advantage).expand_as(policy_sample)
                 # loss = loss.expand_as(policy_sample)
                 loss = loss.mean()
-                # print('\1', sum(self.critic(inputs)))
-                # print('\1', sum(reward_map))
+
                 loss = loss + F.smooth_l1_loss(sum(self.critic(inputs)), sum(reward_map.cuda().float()))
 
                 self.optimizer_agent.zero_grad()
@@ -186,38 +183,11 @@ class EfficientOD():
                 self.rewards_baseline.append(reward_map.cpu())
                 self.policies.append(policy_sample.data.cpu())
 
-                # for batch in range(self.opt['step_batch_size']):
-                #     for ind, policy_element in enumerate(policy_sample.cpu().data[batch]):
-                #         self.efficiency.append(policy_element)
-                #         if int(policy_element) == 0:
-                #             stats = c_stats[batch][ind]
-                #             self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
-                #         elif int(policy_element) == 1:
-                #             # for stats in f_stats[batch][ind]:
-                #             stats = f_stats[batch][ind]
-                #             self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
-                                # self.stats_list.append((torch.squeeze(stats[0], 0), torch.squeeze(stats[1], 0), torch.squeeze(stats[2], 0), stats[3]))
-
-            # print('RL batch_iter: \n', batch_iter)
-            # print('RL nb: \n', nb)
 
             if batch_iter == nb:
-                # print('RL training progress: % from total %'.format(batch_iter, nb))
-                # cal_stats_list = [np.concatenate(x, 0) for x in zip(*self.stats_list)]
-                # if len(cal_stats_list) and cal_stats_list[0].any():
-                #     p, r, ap, f1, ap_class = yoloutil.ap_per_class(*cal_stats_list)
-                #     p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-                #     mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-                #     # pbar.set_description(('\n{} Epoch {} Step - RL Train AP: {} '.format(epoch, i, map50)))
-
                 reward, sparsity, variance, policy_set = utils_ete.performance_stats(self.policies, self.rewards)
-
-                # print('\n{} Epoch - RL Train mean AP: {} / Efficiency: {} '.format(epoch, map50, sum(self.efficiency)/len(self.efficiency)))
-                # print('Train: %d | Rw: %.6f | S: %.3f | V: %.3f | #: %d' % (epoch, reward, sparsity, variance, len(policy_set)))
-
-                # result = epoch, reward.cpu().item(), sparsity.cpu().item(), variance.cpu().item(), map50, sum(self.efficiency)/len(self.efficiency)
-                # with open(self.opt.cv_dir+'/rl_train.txt', 'a') as f:
-                #     f.write(str(result) + '\n')
+                with open(self.opt.cv_dir+'/reward.txt', 'a') as f:
+                    f.write(str(reward) + '\n')
 
                 # save the model --- agent
                 agent_state_dict = self.agent.module.state_dict() if self.opt['parallel'] else self.agent.state_dict()
@@ -227,7 +197,7 @@ class EfficientOD():
                     'reward': reward,
                 }
 
-                torch.save(state, self.opt['cv_dir'] + '/exp2_ckpt_E_{}'.format(self.epoch))
+                torch.save(state, self.opt['cv_dir'] + '/{}_ckpt_E_{}'.format(self.opt['save_name'], self.epoch))
 
     def eval(self, split_val_path, original_img_path):
 
