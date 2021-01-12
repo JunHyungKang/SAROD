@@ -22,7 +22,7 @@ from torch.utils.data import Dataset, SubsetRandomSampler, SequentialSampler
 from tqdm import tqdm
 import copy
 
-from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class
+from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class, clip_coords
 
 
 # Get orientation exif tag
