@@ -102,6 +102,7 @@ if __name__ == '__main__':
             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path_val)
             fine_results, coarse_results = [], []
             s_time = time.time()
+            print('len(fine_dataset.tolist()): \n', len(fine_dataset.tolist()))
             if len(fine_dataset.tolist()) > 0:
                 fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
                 fine_val_loader = load_dataloader(bs, fine_val_dataset)

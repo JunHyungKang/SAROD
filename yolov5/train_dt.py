@@ -895,8 +895,8 @@ class yolov5():
 
                     if pred is None:
                         if nl:
-                            stats = [torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls]
-                            stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
+                            stats_return = [torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls]
+                            stats = [np.concatenate(x, 0) for x in zip(*stats_return)]  # to numpy
 
                             if len(stats) and stats[0].any():
                                 p, r, ap, f1, ap_class = ap_per_class(*stats)
@@ -907,7 +907,7 @@ class yolov5():
                                 nt = torch.zeros(1)
 
                             source_path = str(paths[si].split(os.sep)[-1].split('__')[0])
-                            self.results.append((source_path, paths[si], mp, mr, map50, nl, stats))
+                            self.results.append((source_path, paths[si], mp, mr, map50, nl, stats_return))
                         continue
 
                     # Clip boxes to image bounds
@@ -943,9 +943,9 @@ class yolov5():
 
                     # Append statistics (correct, conf, pcls, tcls)
                     # stats.append((correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls))
-                    stats = [(correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)]
+                    stats_return = [(correct.cpu(), pred[:, 4].cpu(), pred[:, 5].cpu(), tcls)]
 
-                    stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
+                    stats = [np.concatenate(x, 0) for x in zip(*stats_return)]  # to numpy
 
                     if len(stats) and stats[0].any():
                         p, r, ap, f1, ap_class = ap_per_class(*stats)
@@ -956,7 +956,7 @@ class yolov5():
                         nt = torch.zeros(1)
 
                     source_path = str(paths[si].split(os.sep)[-1].split('__')[0])
-                    self.results.append((source_path, paths[si], mp, mr, map50, nl, stats))
+                    self.results.append((source_path, paths[si], mp, mr, map50, nl, stats_return))
         #
         #         # Plot images
         #         # if i < 1:
