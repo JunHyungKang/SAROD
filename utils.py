@@ -347,11 +347,15 @@ def compute_map(fine_result, coarse_result):
 
     if len(fine_result) > 0:
         for result in fine_result:
-            final_stats.append((result[6][0], result[6][1], np.array(result[6][2]), np.array(result[6][3])))
+            try:
+                final_stats.append(result[6][0])
+            except:
+                print('result[6]: \n', result[6])
+
 
     if len(coarse_result) > 0:
         for result in coarse_result:
-            final_stats.append((result[6][0], result[6][1], np.array(result[6][2]), np.array(result[6][3])))
+            final_stats.append(result[6][0])
 
     final_stats = [np.concatenate(x, 0) for x in zip(*final_stats)]
 

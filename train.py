@@ -124,13 +124,13 @@ if __name__ == '__main__':
             print('Validation mAP: \n', map50)
             print('Time for validation: \n', time.time() - s_time)
 
-            with open('val_result_exp2.txt', 'a') as f:
+            with open('val_result_exp1.txt', 'a') as f:
                 f.write(str(map50) + '\n')
 
             eff = 0
             for i in policies:
                 eff += int(i)
-            with open('val_policies_exp2.txt', 'a') as f:
+            with open('val_policies_exp1.txt', 'a') as f:
                 f.write(str(eff/len(policies)) + '\n')
 
     # Testing
@@ -156,11 +156,11 @@ if __name__ == '__main__':
     map50 = compute_map(fine_results, coarse_results)
     print('Test mAP: \n', map50)
 
-    with open('test_result_exp2.txt', 'a') as f:
+    with open('test_result_exp1.txt', 'a') as f:
         f.write(str(map50) + '\n')
 
     eff = 0
     for i in policies:
         eff += int(i)
-    with open('test_policies_exp2.txt', 'a') as f:
+    with open('test_policies_exp1.txt', 'a') as f:
         f.write(str(eff / len(policies)) + '\n')

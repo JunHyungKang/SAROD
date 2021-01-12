@@ -895,7 +895,7 @@ class yolov5():
 
                     if pred is None:
                         if nl:
-                            stats_return = [torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls]
+                            stats_return = [(torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls)]
                             stats = [np.concatenate(x, 0) for x in zip(*stats_return)]  # to numpy
 
                             if len(stats) and stats[0].any():
