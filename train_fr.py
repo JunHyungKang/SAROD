@@ -86,17 +86,6 @@ original_img_path_test = original_img_path + 'test/images'
 assert bs % split == 0, 'batch size should be divided with image split patch size'
 
 num_classes = 2
-# anchor_generator = AnchorGenerator(sizes=((8,), (16,), (32,), (64,), (128,)), aspect_ratios=((0.5, 1.0, 2.0),(0.5, 1.0, 2.0),(0.5, 1.0, 2.0),(0.5, 1.0, 2.0),(0.5, 1.0, 2.0),))
-# fine_backbone = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, num_classes=1, pretrained_backbone=False).backbone
-# coarse_backbone = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, num_classes=1, pretrained_backbone=False).backbone
-
-# # roi
-# roi_pooler = torchvision.ops.MultiScaleRoIAlign(featmap_names=['0', '1', '2', '3'], output_size=(7, 7), sampling_ratio=2)
-
-# fine_model = FasterRCNN(fine_backbone, num_classes=num_classes, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler,
-#                        min_size=800, max_size=1333, rpn_nms_thresh=0.5, rpn_fg_iou_thresh=0.5)
-# coarse_model = FasterRCNN(coarse_backbone, num_classes=num_classes, rpn_anchor_generator=anchor_generator, box_roi_pool=roi_pooler,
-#                          min_size=800, max_size=1333, rpn_nms_thresh=0.5, rpn_fg_iou_thresh=0.5)
 
 fine_model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, num_classes=num_classes, pretrained_backbone=False)
 coarse_model = torchvision.models.detection.fasterrcnn_resnet50_fpn(pretrained=False, num_classes=num_classes, pretrained_backbone=False)

@@ -184,8 +184,8 @@ class EfficientOD():
             self.rewards_baseline.append(reward_map.cpu())
             self.policies.append(policy_sample.data.cpu())
 
-
             if batch_iter == nb:
+
                 reward, sparsity, variance, policy_set = utils_ete.performance_stats(self.policies, self.rewards)
                 with open(self.opt.cv_dir+'/reward.txt', 'a') as f:
                     f.write(str(reward) + '\n')
@@ -238,13 +238,13 @@ class EfficientOD():
                                 os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
                         if j ==1:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___128.png')))
                         if j ==2:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___0.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___0.png')))
                         if j ==3:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___128.png')))
 
                     elif policy_element == 1:
                         if j ==0:
@@ -252,13 +252,13 @@ class EfficientOD():
                                 os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
                         if j ==1:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___128.png')))
                         if j ==2:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___0.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___0.png')))
                         if j ==3:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___128.png')))
 
         return np.array(fine_dataset), np.array(coarse_dataset), efficiency
 

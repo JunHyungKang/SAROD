@@ -1,5 +1,5 @@
 data: "yolov5/data/HRSID_800_rl.yaml"
-batch_size: 40
+batch_size: 120
 conf_thres: 0.001
 iou_thres: 0.6  # for NMS
 augment: False

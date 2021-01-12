@@ -1,7 +1,7 @@
 cfg: "yolov5/models/yolov5x_custom.yaml"
 data: "yolov5/data/HRSID_800_od.yaml"
 hyp: ''
-img_size: [480, 480]
+img_size: [128, 128]
 rect: False
 resume: False
 nosave: False
@@ -11,8 +11,8 @@ evolve: False
 bucket: ''
 cache_images: False
 weights: ''
-name: "exp1_fine"
-device: 0
+name: "exp2_fine"
+device: 1
 multi_scale: False
 single_cls: True
 sync_bn: False
