@@ -631,3 +631,72 @@ class SmoothedValue(object):
             global_avg=self.global_avg,
             max=self.max,
             value=self.value)
+
+def make_results(model, dataset, device='cuda'):
+    model.eval()
+    results = []
+    seen, stats = 0, []
+    iouv = torch.linspace(0.5, 0.95, 10)
+    niou = iouv.numel()
+    nb, _, height, width = dataset[0].shape
+    whwh = torch.Tensor([width, height, width, height])
+    
+    # model output
+    with torch.no_grad():
+        outputs = model((dataset[0]/255.).to(device))
+    
+    # results list
+    output = []
+    for out in outputs:
+        output.append(torch.cat([out['boxes'], out['scores'].unsqueeze(1), out['labels'].unsqueeze(1).type(torch.float)], axis=1))
+    
+    targets = dataset[1]
+    for si, pred in enumerate(output):
+        pred = pred.cpu()
+        p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
+        labels = targets[targets[:,0] == si, 1:]
+        nl = len(labels)
+        tcls = labels[:,0].tolist() if nl else []
+
+        if pred is None:
+            if nl:
+                stats.append(torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls)
+            continue
+
+        # clip boxes
+        clip_coords(pred, (height, width))
+
+        correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
+        if nl:
+            detected = []
+            tcls_tensor = labels[:,0]
+            tbox = xywh2xyxy(labels[:, 1:5]) * whwh
+
+            for cls in torch.unique(tcls_tensor):
+                ti = (cls == tcls_tensor).nonzero().view(-1)
+                pi = (cls == pred[:,5]).nonzero().view(-1)
+
+                if pi.shape[0]:
+                    ious, j = box_iou(pred[pi, :4], tbox[ti]).max(1)
+                    for k in (ious > iouv[0]).nonzero():
+                        d = ti[j[k]]
+                        if d not in detected:
+                            detected.append(d)
+                            correct[pi[k]] = ious[k] > iouv
+                            if len(detected) == nl:
+                                break
+                                
+        stats = [(correct.cpu(), pred[:,4].cpu(), pred[:,5].cpu(), tcls)]
+        stats = [np.concatenate(x, 0) for x in zip(*stats)]
+        
+        if len(stats) and stats[0].any():
+            p, r, ap, f1, ap_class = ap_per_class(*stats)
+            p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
+            mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+            nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
+        else:
+            nt = torch.zeros(1)
+
+        source_path = str(dataset[2][si].split(os.sep)[-1].split('__')[0])
+        results.append((source_path, dataset[2][si], mp, mr, map50, nl, stats))
+    return results

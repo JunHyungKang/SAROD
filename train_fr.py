@@ -23,17 +23,18 @@ from EfficientObjectDetection.train_new_reward import EfficientOD
 import munch
 import os
 import utils
-from utils import load_filenames, load_dataset, load_dataloader, compute_map, convert_yolo2coco, label2idx, label_matching, reduce_dict # bug fix
+from utils import load_filenames, load_dataset, load_dataloader, compute_map, convert_yolo2coco, label2idx, label_matching, reduce_dict, make_results
 
 opt = {'epochs':100,
-      'batch_size':24,
-      'device':2,
+      'batch_size':12,
+      'device':1,
       'test_epoch':10,
       'eval_epoch':2,
       'step_batch_size':100,
       'save_path':'save',
+       'save_freq': 5,
       'rl_weight':None,
-      'print_freq':1,
+      'print_freq': 50,
       'h_detector_weight':'',
       'l_detector_weight':'',
       'fine_tr':'config/fine_tr.yaml',
@@ -42,9 +43,7 @@ opt = {'epochs':100,
       'coarse_eval':'config/coarse_eval.yaml',
       'EfficientOD':'config/EfficientOD.yaml',
       'split': 4}
-
-opt = munch.AutoMunch(opt)
-
+       
 opt = munch.AutoMunch(opt)
 
 # GPU Device
@@ -148,7 +147,7 @@ for e in range(epochs):
     fine_metric_logger = utils.MetricLogger(delimiter="  ")
     fine_metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     coarse_metric_logger = utils.MetricLogger(delimiter="  ")
-    coarse_metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
+    coarse_metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))   
     fine_header = 'Fine Epoch: [{}]'.format(e)
     coarse_header = 'Coarse Epoch: [{}]'.format(e)
     
@@ -162,10 +161,6 @@ for e in range(epochs):
         coarse_lr_scheduler = utils.warmup_lr_scheduler(coarse_optim, warmup_iters, warmup_factor)
     
     for i, (fine_train, coarse_train) in enumerate(zip(fine_train_loader, coarse_train_loader)):
-        fine_results, coarse_results = [], []
-        # YOLOv5 train
-#         fine_detector.train(e, i, nb, fine_train_dataset, fine_train)
-#         coarse_detector.train(e, i, nb, coarse_train_dataset, coarse_train)
         # train
         fine_model.train()
         coarse_model.train()
@@ -175,8 +170,8 @@ for e in range(epochs):
         fine_imgs = fine_imgs.to(device) / 255.
         
         ## train: img normalization --> not, zerodivision err
-        fine_loss_dict = fine_model(fine_imgs, copy.deepcopy(fine_labels))
-        fine_losses = sum(loss for loss in fine_loss_dict.values())
+        fine_loss_dict = fine_model(fine_imgs, copy.deepcopy(fine_labels))       
+        fine_losses = sum(loss for loss in fine_loss_dict.values())        
         fine_loss_dict_reduced = reduce_dict(fine_loss_dict)
         fine_loss_reduced = sum(loss for loss in fine_loss_dict_reduced.values())
         fine_loss_val = fine_loss_reduced.item()
@@ -196,7 +191,6 @@ for e in range(epochs):
             space_fmt = ':' + str(len(str(fine_train_nb))) + 'd'
             log_msg = fine_metric_logger.delimiter.join([fine_header, '[{0' + space_fmt + '}/{1}]', '{meters}'])
             print(log_msg.format(i, fine_train_nb, meters=str(fine_metric_logger)))
-            
         
         ### coarse train ###
         # Label mathching
@@ -222,163 +216,78 @@ for e in range(epochs):
             coarse_lr_scheduler.step()
         
         coarse_metric_logger.update(loss=coarse_loss_reduced, **coarse_loss_dict_reduced)
-        coarse_metric_logger.update(lr=fine_optim.param_groups[0]["lr"])
+        coarse_metric_logger.update(lr=fine_optim.param_groups[0]["lr"]) 
         
         if i % opt.print_freq ==0:
             space_fmt = ':' + str(len(str(fine_train_nb))) + 'd'
             log_msg = coarse_metric_logger.delimiter.join([coarse_header, '[{0' + space_fmt + '}/{1}]', '{meters}'])
             print(log_msg.format(i, fine_train_nb, meters=str(coarse_metric_logger)))
             
-            
-        ## train eval
+        ## train eval        
         # result = (source_path, paths[si], mp, mr, map50, nl, stats)
-        # fine_results = fine_detector.eval(fine_train)
-        # coarse_results = coarse_detector.eval(coarse_train)
-        
         # file_name, od_file_dir, mp=0(skip), ma=0(skip), map50(will be soon), objnum, stat
         # stat = 4
-        fine_model.eval()
-        coarse_model.eval()
-        seen, stats = 0, []
-        iouv = torch.linspace(0.5, 0.95, 10).to(device)
-        niou = iouv.numel()
-        nb, _, height, width = fine_train[0].shape
-        whwh = torch.Tensor([width, height, width, height])
         
-        #### fine results ####
-        with torch.no_grad():
-            fine_out = fine_model((fine_train[0]/255.).to(device))
-#             coarse_out = coarse_model(coarse_train[0]/255.)
-        fine_output = []
-        for out in fine_out:
-            fine_output.append(torch.cat([out['boxes'], out['scores'].unsqueeze(1), out['labels'].unsqueeze(1).type(torch.float)], axis=1))
-        targets = fine_train[1]
-        for si, pred in enumerate(fine_output):
-            pred = pred.cpu()
-            p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-            labels = targets[targets[:,0] == si, 1:]
-            nl = len(labels)
-            tcls = labels[:,0].tolist() if nl else []
-            
-            if pred is None:
-                if nl:
-                    stats.append(torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls)
-                continue
-            
-            # clip boxes
-            
-            correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-            if nl:
-                detected = []
-                tcls_tensor = labels[:,0]
-                tbox = xywh2xyxy(labels[:, 1:5]) * whwh
-                
-                for cls in torch.unique(tcls_tensor):
-                    ti = (cls == tcls_tensor).nonzero().view(-1)
-                    pi = (cls == pred[:,5]).nonzero().view(-1)
-                    
-                    if pi.shape[0]:
-                        ious, j = box_iou(pred[pi, :4], tbox[ti]).max(1)
-                        for k in (ious > iouv[0]).nonzero():
-                            d = ti[j[k]]
-                            if d not in detected:
-                                detected.append(d)
-                                correct[pi[k]] = ious[k] > iouv
-                                if len(detected) == nl:
-                                    break
-            stats = [(correct.cpu(), pred[:,4].cpu(), pred[:,5].cpu(), tcls)]
-            stats = [np.concatenate(x, 0) for x in zip(*stats)]
-            if len(stats) and stats[0].any():
-                p, r, ap, f1, ap_class = ap_per_class(*stats)
-                p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-                mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-                nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-            else:
-                nt = torch.zeros(1)
-
-            source_path = str(fine_train[2][si].split(os.sep)[-1].split('__')[0])
-            fine_results.append((source_path, fine_train[2][si], mp, mr, map50, nl, stats))
-
-        nb, _, height, width = coarse_train[0].shape
-        whwh = torch.Tensor([width, height, width, height])
-        
-        #### coarse results ####
-        with torch.no_grad():
-            coarse_out = coarse_model((coarse_train[0]/255.).to(device))
-        coarse_output = []
-        for out in coarse_out:
-            coarse_output.append(torch.cat([out['boxes'], out['scores'].unsqueeze(1), out['labels'].unsqueeze(1).type(torch.float)], axis=1))
-        targets = coarse_train[1]
-        for si, pred in enumerate(coarse_output):
-            pred = pred.cpu()
-            p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
-            labels = targets[targets[:,0] == si, 1:]
-            nl = len(labels)
-            tcls = labels[:,0].tolist() if nl else []
-            
-            if pred is None:
-                if nl:
-                    stats.append(torch.zeros(0, niou, dtype=torch.bool), torch.Tensor(), torch.Tensor(), tcls)
-                continue
-            
-            # clip boxes
-            
-            correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
-            if nl:
-                detected = []
-                tcls_tensor = labels[:,0]
-                tbox = xywh2xyxy(labels[:, 1:5]) * whwh
-                
-                for cls in torch.unique(tcls_tensor):
-                    ti = (cls == tcls_tensor).nonzero().view(-1)
-                    pi = (cls == pred[:,5]).nonzero().view(-1)
-                    
-                    if pi.shape[0]:
-                        ious, j = box_iou(pred[pi, :4], tbox[ti]).max(1)
-                        for k in (ious > iouv[0]).nonzero():
-                            d = ti[j[k]]
-                            if d not in detected:
-                                detected.append(d)
-                                correct[pi[k]] = ious[k] > iouv
-                                if len(detected) == nl:
-                                    break
-            stats = [(correct.cpu(), pred[:,4].cpu(), pred[:,5].cpu(), tcls)]
-            stats = [np.concatenate(x, 0) for x in zip(*stats)]
-            if len(stats) and stats[0].any():
-                p, r, ap, f1, ap_class = ap_per_class(*stats)
-                p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-                mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-                nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-            else:
-                nt = torch.zeros(1)
-
-            source_path = str(coarse_train[2][si].split(os.sep)[-1].split('__')[0])
-            coarse_results.append((source_path, coarse_train[2][si], mp, mr, map50, nl, stats))
-
+        # make_results(model, dataset, device)
+        fine_results = make_results(fine_model, fine_train, device)
+        coarse_results = make_results(coarse_model, coarse_train, device)
             
         # conf_thresh=0.001 / iou_thres=0.6
         rl_agent.train(e, i, nb, fine_results, coarse_results, original_data_path=original_img_path_train)
 
         ## Validation
-#         if e % 10 == 0:
-#             fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path)
-#             fine_results, coarse_results = [], []
+    if e % 1 == 0:
+        fine_dataset, coarse_dataset, policies = rl_agent.eval(split_val_path, original_img_path_val)
+        print(len(fine_dataset.tolist()))
+        print(len(coarse_dataset.tolist()))
+        fine_results, coarse_results = [], []
 
-#             print(len(fine_dataset.tolist()))
-#             print(len(coarse_dataset.tolist()))
+        if len(fine_dataset.tolist()) > 0:
+            fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
+            fine_val_loader = load_dataloader(bs, fine_val_dataset)
+            fine_nb = len(fine_val_loader)
+            for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
+                fine_results += make_results(fine_model, fine_val, device)
 
-#             if len(fine_dataset.tolist()) > 0:
-#                 fine_val_dataset = load_dataset(fine_dataset, fine_tr, bs)
-#                 fine_val_loader = load_dataloader(bs, fine_val_dataset)
-#                 fine_nb = len(fine_val_loader)
-#                 for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
-#                     fine_results.append(fine_detector.eval(fine_val))
+        if len(coarse_dataset.tolist()) > 0:
+            coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+            coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
+            coarse_nb = len(coarse_train_loader)
+            for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
+                coarse_results += make_results(coarse_model, coarse_val, device)
 
-#             if len(coarse_dataset.tolist()) > 0:
-#                 coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
-#                 coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
-#                 coarse_nb = len(coarse_train_loader)
-#                 for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
-#                     coarse_results.append(coarse_detector.eval(coarse_val))
         map50 = compute_map(fine_results, coarse_results)
-        print('MAP: \n', map50)
+        print('Validation MAP: \n', map50)
+        
+    # save
+    if e % opt.save_freq == 0:
+        torch.save(fine_model,  os.path.join(opt.save, 'fine_model'))
+        torch.save(coarse_model, os.path.join(opt.save, 'coarse_model'))
+
+
+# Testing
+fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
+fine_results, coarse_results = [], []
+
+if len(fine_dataset.tolist()) > 0:
+    fine_test_dataset = load_dataset(fine_dataset, fine_tr, bs)
+    fine_test_loader = load_dataloader(bs, fine_test_dataset)
+    fine_nb = len(fine_test_loader)
+    for i, fine_test in tqdm.tqdm(enumerate(fine_test_loader), total=fine_nb):
+        fine_results += make_results(fine_model, fine_test, device)
+
+if len(coarse_dataset.tolist()) > 0:
+    coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+    coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
+    coarse_nb = len(coarse_test_loader)
+    for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
+        coarse_results += make_results(coarse_model, coarse_test, device)
+
+map50 = compute_map(fine_results, coarse_results)
+print('MAP: \n', map50)
+
+with open('test_result.txt', 'a') as f:
+    f.write(str(map50))
+
+with open('test_policies.txt', 'a') as f:
+    f.write(str(policies))
