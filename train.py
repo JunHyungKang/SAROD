@@ -14,9 +14,9 @@ from utils import load_filenames, load_dataset, load_dataloader, compute_map
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--batch_size', type=int, default=24, help="Total batch size for all gpus.")
-    parser.add_argument('--device', default='0', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
+    parser.add_argument('--epochs', type=int, default=200)
+    parser.add_argument('--batch_size', type=int, default=40, help="Total batch size for all gpus.")
+    parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
     parser.add_argument('--eval_epoch', type=int, default=1)
     parser.add_argument('--step_batch_size', type=int, default=100)
@@ -31,11 +31,11 @@ if __name__ == '__main__':
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
     parser.add_argument('--split', default=4)
     parser.add_argument('--split_train_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/train/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/train/images')
     parser.add_argument('--split_val_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/val/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/val/images')
     parser.add_argument('--split_test_path',
-                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_0/rl_ver/test/images')
+                        default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/test/images')
     parser.add_argument('--original_img_path_train',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/train/images')
     parser.add_argument('--original_img_path_val',
@@ -79,11 +79,11 @@ if __name__ == '__main__':
     fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
     coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
 
-    fine_train_loader = load_dataloader(bs, fine_train_dataset)
-    coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
-
     for e in range(epochs):
         print('Starting training for %g epochs...' % e)
+
+        fine_train_loader = load_dataloader(bs, fine_train_dataset)
+        coarse_train_loader = load_dataloader(bs, coarse_train_dataset)
 
         fine_train_nb = len(fine_train_loader)
         coarse_train_nb = len(coarse_train_loader)
@@ -92,14 +92,14 @@ if __name__ == '__main__':
 
         for i, (fine_train, coarse_train) in tqdm.tqdm(enumerate(zip(fine_train_loader, coarse_train_loader)),
                                                        total=fine_train_nb):
-            fine_detector.train(e, i, nb, fine_train_dataset, fine_train)
-            coarse_detector.train(e, i, nb, coarse_train_dataset, coarse_train)
+            fine_detector.train(e, i+1, nb, fine_train_dataset, fine_train)
+            coarse_detector.train(e, i+1, nb, coarse_train_dataset, coarse_train)
 
             # result = (source_path, paths[si], mp, mr, map50, nl, stats)
             fine_results = fine_detector.eval(fine_train)
             coarse_results = coarse_detector.eval(coarse_train)
 
-            rl_agent.train(e, i, nb, fine_results, coarse_results, original_img_path_train)
+            rl_agent.train(e, i+1, nb, fine_results, coarse_results, original_img_path_train)
 
         # Validation
         if e % 1 == 0:
@@ -112,7 +112,7 @@ if __name__ == '__main__':
                 fine_val_loader = load_dataloader(bs, fine_val_dataset)
                 fine_nb = len(fine_val_loader)
                 for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
-                    for j in fine_detector.eval(fine_val):
+                    for j in fine_detector.test(fine_val):
                         fine_results.append(j)
 
             print('len(coarse_dataset.tolist()): \n', len(coarse_dataset.tolist()))
@@ -121,18 +121,21 @@ if __name__ == '__main__':
                 coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
                 coarse_nb = len(coarse_train_loader)
                 for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
-                    for j in coarse_detector.eval(coarse_val):
+                    for j in coarse_detector.test(coarse_val):
                         coarse_results.append(j)
 
             map50 = compute_map(fine_results, coarse_results)
             print('Validation mAP: \n', map50)
             print('Time for validation: \n', time.time() - s_time)
 
-            with open('val_result.txt', 'a') as f:
-                f.write(str(map50))
+            with open('val_result_exp2.txt', 'a') as f:
+                f.write(str(map50) + '\n')
 
-            with open('val_policies.txt', 'a') as f:
-                f.write(str(policies))
+            eff = 0
+            for i in policies:
+                eff += int(i)
+            with open('val_policies_exp2.txt', 'a') as f:
+                f.write(str(eff/len(policies)) + '\n')
 
     # Testing
     fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
@@ -143,7 +146,7 @@ if __name__ == '__main__':
         fine_test_loader = load_dataloader(bs, fine_test_dataset)
         fine_nb = len(fine_test_loader)
         for i, fine_test in tqdm.tqdm(enumerate(fine_test_loader), total=fine_nb):
-            for j in fine_detector.eval(fine_test):
+            for j in fine_detector.test(fine_test):
                 fine_results.append(j)
 
     if len(coarse_dataset.tolist()) > 0:
@@ -151,14 +154,17 @@ if __name__ == '__main__':
         coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
         coarse_nb = len(coarse_test_loader)
         for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
-            for j in coarse_detector.eval(coarse_test):
+            for j in coarse_detector.test(coarse_test):
                 coarse_results.append(j)
 
     map50 = compute_map(fine_results, coarse_results)
-    print('MAP: \n', map50)
+    print('Test mAP: \n', map50)
 
-    with open('val_result.txt', 'a') as f:
-        f.write(str(map50))
+    with open('test_result_exp2.txt', 'a') as f:
+        f.write(str(map50) + '\n')
 
-    with open('val_policies.txt', 'a') as f:
-        f.write(str(policies))
+    eff = 0
+    for i in policies:
+        eff += int(i)
+    with open('test_policies_exp2.txt', 'a') as f:
+        f.write(str(eff / len(policies)) + '\n')
