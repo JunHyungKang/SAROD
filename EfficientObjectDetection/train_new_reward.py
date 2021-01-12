@@ -101,7 +101,7 @@ class EfficientOD():
         p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
         # for epoch in range(self.epoch, self.epoch + 1):
         self.agent.train()
-        if batch_iter == 0:
+        if batch_iter == 1:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
         # print('len(result_fine): \n', len(result_fine))
@@ -128,7 +128,7 @@ class EfficientOD():
 
         if len(self.buffer) >= 1000:
             # print('RL training is ongoing! buffer size is more than 1000')
-            pbar = tqdm.tqdm(range((epoch+1)*6))
+            pbar = range((epoch+1)*6)
             for i in pbar:
                 minibatch = random.sample(self.buffer, self.opt['step_batch_size'])
                 minibatch = np.array(minibatch)
@@ -186,38 +186,38 @@ class EfficientOD():
                 self.rewards_baseline.append(reward_map.cpu())
                 self.policies.append(policy_sample.data.cpu())
 
-                for batch in range(self.opt['step_batch_size']):
-                    for ind, policy_element in enumerate(policy_sample.cpu().data[batch]):
-                        self.efficiency.append(policy_element)
-                        if int(policy_element) == 0:
-                            stats = c_stats[batch][ind]
-                            self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
-                        elif int(policy_element) == 1:
-                            # for stats in f_stats[batch][ind]:
-                            stats = f_stats[batch][ind]
-                            self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
+                # for batch in range(self.opt['step_batch_size']):
+                #     for ind, policy_element in enumerate(policy_sample.cpu().data[batch]):
+                #         self.efficiency.append(policy_element)
+                #         if int(policy_element) == 0:
+                #             stats = c_stats[batch][ind]
+                #             self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
+                #         elif int(policy_element) == 1:
+                #             # for stats in f_stats[batch][ind]:
+                #             stats = f_stats[batch][ind]
+                #             self.stats_list.append((stats[0], stats[1], stats[2], stats[3]))
                                 # self.stats_list.append((torch.squeeze(stats[0], 0), torch.squeeze(stats[1], 0), torch.squeeze(stats[2], 0), stats[3]))
 
-            print('RL batch_iter: \n', batch_iter)
-            print('RL nb: \n', nb)
+            # print('RL batch_iter: \n', batch_iter)
+            # print('RL nb: \n', nb)
 
             if batch_iter == nb:
-                print('RL training progress: % from total %'.format(batch_iter, nb))
-                cal_stats_list = [np.concatenate(x, 0) for x in zip(*self.stats_list)]
-                if len(cal_stats_list) and cal_stats_list[0].any():
-                    p, r, ap, f1, ap_class = yoloutil.ap_per_class(*cal_stats_list)
-                    p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-                    mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-                    # pbar.set_description(('\n{} Epoch {} Step - RL Train AP: {} '.format(epoch, i, map50)))
+                # print('RL training progress: % from total %'.format(batch_iter, nb))
+                # cal_stats_list = [np.concatenate(x, 0) for x in zip(*self.stats_list)]
+                # if len(cal_stats_list) and cal_stats_list[0].any():
+                #     p, r, ap, f1, ap_class = yoloutil.ap_per_class(*cal_stats_list)
+                #     p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
+                #     mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+                #     # pbar.set_description(('\n{} Epoch {} Step - RL Train AP: {} '.format(epoch, i, map50)))
 
                 reward, sparsity, variance, policy_set = utils_ete.performance_stats(self.policies, self.rewards)
 
-                print('\n{} Epoch - RL Train mean AP: {} / Efficiency: {} '.format(epoch, map50, sum(self.efficiency)/len(self.efficiency)))
-                print('Train: %d | Rw: %.6f | S: %.3f | V: %.3f | #: %d' % (epoch, reward, sparsity, variance, len(policy_set)))
+                # print('\n{} Epoch - RL Train mean AP: {} / Efficiency: {} '.format(epoch, map50, sum(self.efficiency)/len(self.efficiency)))
+                # print('Train: %d | Rw: %.6f | S: %.3f | V: %.3f | #: %d' % (epoch, reward, sparsity, variance, len(policy_set)))
 
-                result = epoch, reward.cpu().item(), sparsity.cpu().item(), variance.cpu().item(), map50, sum(self.efficiency)/len(self.efficiency)
-                with open(self.opt.cv_dir+'/rl_train.txt', 'a') as f:
-                    f.write(str(result) + '\n')
+                # result = epoch, reward.cpu().item(), sparsity.cpu().item(), variance.cpu().item(), map50, sum(self.efficiency)/len(self.efficiency)
+                # with open(self.opt.cv_dir+'/rl_train.txt', 'a') as f:
+                #     f.write(str(result) + '\n')
 
                 # save the model --- agent
                 agent_state_dict = self.agent.module.state_dict() if self.opt['parallel'] else self.agent.state_dict()
@@ -227,7 +227,7 @@ class EfficientOD():
                     'reward': reward,
                 }
 
-                torch.save(state, self.opt['cv_dir'] + '/ckpt_E_{}'.format(self.epoch))
+                torch.save(state, self.opt['cv_dir'] + '/exp2_ckpt_E_{}'.format(self.epoch))
 
     def eval(self, split_val_path, original_img_path):
 
@@ -267,13 +267,13 @@ class EfficientOD():
                                 os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
                         if j ==1:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___320.png')))
                         if j ==2:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___0.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__320___0.png')))
                         if j ==3:
                             coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__320___320.png')))
 
                     elif policy_element == 1:
                         if j ==0:
@@ -281,13 +281,13 @@ class EfficientOD():
                                 os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
                         if j ==1:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___320.png')))
                         if j ==2:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___0.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__320___0.png')))
                         if j ==3:
                             fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__400___400.png')))
+                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__320___320.png')))
 
             # policies.append(policy.data)
 
