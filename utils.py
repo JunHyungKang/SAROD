@@ -52,7 +52,7 @@ def load_dataloader(batch_size, dataset):
     batch_size = min(batch_size, len(dataset))
     nw = min([os.cpu_count() // 1, batch_size if batch_size > 1 else 0, 8])  # number of workers
     sampler_list = []
-    temp = list(range(batch_size))
+    temp = list(range(round(len(dataset)/4)-1))
     np.random.shuffle(temp)
     for i in temp:
         sampler_list.append(i + 0)

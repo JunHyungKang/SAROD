@@ -19,17 +19,12 @@ if __name__ == '__main__':
     parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
     parser.add_argument('--eval_epoch', type=int, default=1)
-    parser.add_argument('--step_batch_size', type=int, default=100)
-    parser.add_argument('--save_path', default='save')
-    parser.add_argument('--rl_weight', default=None)
-    parser.add_argument('--h_detector_weight', default=' ')
-    parser.add_argument('--l_detector_weight', default=' ')
     parser.add_argument('--fine_tr', default='config/fine_tr.yaml')
     parser.add_argument('--fine_eval', default='config/fine_eval.yaml')
     parser.add_argument('--coarse_tr', default='config/coarse_tr.yaml')
     parser.add_argument('--coarse_eval', default='config/coarse_eval.yaml')
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
-    parser.add_argument('--split', default=4)
+    parser.add_argument('--split', type=int, default=4)
     parser.add_argument('--split_train_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/train/images')
     parser.add_argument('--split_val_path',

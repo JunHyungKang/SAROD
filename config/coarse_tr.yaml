@@ -11,7 +11,7 @@ evolve: False
 bucket: ''
 cache_images: False
 weights: ''''
-name: "yolov5x_800_96_200epoch"
+name: "exp1_coarse"
 device: 0
 multi_scale: False
 single_cls: True

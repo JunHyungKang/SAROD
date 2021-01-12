@@ -2,8 +2,8 @@ gpu_id: 0
 lr: 1e-3
 cv_dir: weight
 save_name: exp1
-batch_size: 24
-step_batch_size: 5
+batch_size: 40
+step_batch_size: 100
 img_size: 480
 epoch_step: 20
 max_epochs: opt.epochs
