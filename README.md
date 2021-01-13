@@ -59,6 +59,7 @@ pip install -r requirements.txt
 ```
 
 ## Train
+### Yolo v3, Yolo v5, Faster-RCNN
 refer to 'demo_training.ipynb'
 ```
 !python train.py --epochs 10\
@@ -71,6 +72,7 @@ refer to 'demo_training.ipynb'
 ```
 
 ## Evaluation
+### Yolo v3, Yolo v5, Faster-RCNN
 refer to 'demo_evaluation.ipynb'
 ```
 !python test.py --epochs 1\
