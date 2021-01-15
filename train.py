@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--coarse_tr', default='config/coarse_tr.yaml')
     parser.add_argument('--coarse_eval', default='config/coarse_eval.yaml')
     parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
+    parser.add_argument('--save_freq', default=5)
     parser.add_argument('--split', type=int, default=4)
     parser.add_argument('--split_train_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/train/images')
@@ -390,7 +391,7 @@ if __name__ == '__main__':
                     f.write(str(eff / len(policies)) + '\n')
 
             # save
-            if e % opt.save_freq == 5:
+            if e % opt.save_freq == 0:
                 torch.save(fine_model, os.path.join('weight', 'fine_model_{}'.format(e)))
                 torch.save(coarse_model, os.path.join('weight', 'coarse_model_{}'.format(e)))
 
