@@ -419,8 +419,9 @@ def label_matching(dataset, device='cuda'):
     # function:
         label이 있는 image set만 matching return
     '''
-    imgs = dataset[0]
-    labels = dataset[1]
+    # call-by-values
+    imgs = dataset[0].clone()
+    labels = dataset[1].clone()
     
     # label length
 #     length = len(np.unique(labels[:,0]))\
