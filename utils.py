@@ -352,16 +352,18 @@ def compute_map(fine_result, coarse_result):
             except:
                 print('result[6]: \n', result[6])
 
-
     if len(coarse_result) > 0:
         for result in coarse_result:
             final_stats.append(result[6][0])
 
-    final_stats = [np.concatenate(x, 0) for x in zip(*final_stats)]
+    if len(final_stats) == 0:
+        map50 = None
+    else:
+        final_stats = [np.concatenate(x, 0) for x in zip(*final_stats)]
 
-    p, r, ap, f1, ap_class = ap_per_class(*final_stats)
-    p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-    mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
+        p, r, ap, f1, ap_class = ap_per_class(*final_stats)
+        p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
+        mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
 
     return map50
 
