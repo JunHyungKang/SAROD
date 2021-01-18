@@ -197,15 +197,17 @@ if __name__ == '__main__':
 
                 map50 = compute_map(fine_results, coarse_results)
                 print('Validation mAP: \n', map50)
+                print('Validation find mAP: \n', compute_map(fine_results, []))
+                print('Validation coarse mAP: \n', compute_map([], coarse_results))
                 print('Time for validation: \n', time.time() - s_time)
 
-                with open('val_result.txt', 'a') as f:
+                with open(opt.save_path + '/val_result.txt', 'a') as f:
                     f.write(str(map50) + '\n')
 
                 eff = 0
                 for i in policies:
                     eff += int(i)
-                with open('val_policies.txt', 'a') as f:
+                with open(opt.save_path + '/val_policies.txt', 'a') as f:
                     f.write(str(eff / len(policies)) + '\n')
 
         # Testing
@@ -230,14 +232,16 @@ if __name__ == '__main__':
 
         map50 = compute_map(fine_results, coarse_results)
         print('Test mAP: \n', map50)
+        print('Test find mAP: \n', compute_map(fine_results, []))
+        print('Test coarse mAP: \n', compute_map([], coarse_results))
 
-        with open('test_result.txt', 'a') as f:
+        with open(opt.save_path + '/test_result.txt', 'a') as f:
             f.write(str(map50) + '\n')
 
         eff = 0
         for i in policies:
             eff += int(i)
-        with open('test_policies.txt', 'a') as f:
+        with open(opt.save_path + '/test_policies.txt', 'a') as f:
             f.write(str(eff / len(policies)) + '\n')
 
     elif opt.model == 'faster_rcnn':
@@ -432,13 +436,13 @@ if __name__ == '__main__':
                 print('Validation find mAP: \n', compute_map(fine_results, []))
                 print('Validation coarse mAP: \n', compute_map([], coarse_results))
 
-                with open('val_result_faster.txt', 'a') as f:
+                with open(opt.save_path + '/val_result_faster.txt', 'a') as f:
                     f.write(str(map50))
 
                 eff = 0
                 for i in policies:
                     eff += int(i)
-                with open('val_policies_faster.txt', 'a') as f:
+                with open(opt.save_path + '/val_policies_faster.txt', 'a') as f:
                     f.write(str(eff / len(policies)) + '\n')
 
             # save
@@ -467,14 +471,16 @@ if __name__ == '__main__':
 
         map50 = compute_map(fine_results, coarse_results)
         print('MAP: \n', map50)
+        print('Test find mAP: \n', compute_map(fine_results, []))
+        print('Test coarse mAP: \n', compute_map([], coarse_results))
 
-        with open('test_result_faster.txt', 'a') as f:
+        with open(opt.save_path + '/test_result_faster.txt', 'a') as f:
             f.write(str(map50))
 
         eff = 0
         for i in policies:
             eff += int(i)
-        with open('test_policies_faster.txt', 'a') as f:
+        with open(opt.save_path + '/test_policies_faster.txt', 'a') as f:
             f.write(str(eff / len(policies)) + '\n')
 
 
