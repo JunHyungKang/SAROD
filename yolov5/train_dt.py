@@ -381,7 +381,7 @@ class yolov5():
                     'optimizer': None}
 
             # Save last, best and delete
-            torch.save(ckpt, self.opt['save_path'] + self.wdir + str(epoch) + '.pt')
+            torch.save(ckpt, self.wdir + str(epoch) + '.pt')
 
             del ckpt
 
