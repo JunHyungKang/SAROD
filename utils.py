@@ -22,7 +22,7 @@ from torch.utils.data import Dataset, SubsetRandomSampler, SequentialSampler
 from tqdm import tqdm
 import copy
 
-from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class, clip_coords
+from yolov5.utils.utils import xyxy2xywh, xywh2xyxy, torch_distributed_zero_first, ap_per_class, clip_coords, box_iou
 
 
 # Get orientation exif tag
@@ -419,8 +419,8 @@ def label_matching(dataset, device='cuda'):
     # function:
         label이 있는 image set만 matching return
     '''
-    imgs = dataset[0]
-    labels = dataset[1]
+    imgs = dataset[0].clone()
+    labels = dataset[1].clone()
     
     # label length
 #     length = len(np.unique(labels[:,0]))\
@@ -663,7 +663,7 @@ def make_results(model, dataset, device='cuda'):
     # results list
     output = []
     for out in outputs:
-        output.append(torch.cat([out['boxes'], out['scores'].unsqueeze(1), out['labels'].unsqueeze(1).type(torch.float)], axis=1))
+        output.append(torch.cat([out['boxes'], out['scores'].unsqueeze(1), out['labels'].unsqueeze(1).type(torch.float)-1], axis=1))
     
     targets = dataset[1]
     for si, pred in enumerate(output):
@@ -681,7 +681,7 @@ def make_results(model, dataset, device='cuda'):
         # clip boxes
         clip_coords(pred, (height, width))
 
-        correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool, device=device)
+        correct = torch.zeros(pred.shape[0], niou, dtype=torch.bool)
         if nl:
             detected = []
             tcls_tensor = labels[:,0]
@@ -697,7 +697,7 @@ def make_results(model, dataset, device='cuda'):
                         d = ti[j[k]]
                         if d not in detected:
                             detected.append(d)
-                            correct[pi[k]] = ious[k] > iouv
+                            correct[pi[k]] = ious[k].cpu() > iouv.cpu()
                             if len(detected) == nl:
                                 break
                                 
@@ -708,7 +708,7 @@ def make_results(model, dataset, device='cuda'):
             p, r, ap, f1, ap_class = ap_per_class(*stats)
             p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
             mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-            nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
+            nt = np.bincount(stats[3].astype(np.int64), minlength=1)  # number of targets per class
         else:
             nt = torch.zeros(1)
 
