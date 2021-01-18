@@ -22,7 +22,7 @@ from torchvision import transforms
 
 from yolov5.train_dt import yolov5
 from EfficientObjectDetection.train_new_reward import EfficientOD
-from utils import load_filenames, load_dataset, load_dataloader, compute_map, convert_yolo2coco, label2idx, label_matching, reduce_dict, make_results
+from utils import load_filenames, load_dataset, load_dataloader, compute_map, convert_yolo2coco, label2idx, label_matching, reduce_dict, make_results, make_results_test
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -418,7 +418,7 @@ if __name__ == '__main__':
                     fine_val_loader = load_dataloader(bs, fine_val_dataset)
                     fine_nb = len(fine_val_loader)
                     for i, fine_val in tqdm.tqdm(enumerate(fine_val_loader), total=fine_nb):
-                        fine_results += make_results(fine_model, fine_val, device)
+                        fine_results += make_results_test(fine_model, fine_val, device)
 
                 if len(coarse_dataset.tolist()) > 0:
                     coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
@@ -429,6 +429,8 @@ if __name__ == '__main__':
 
                 map50 = compute_map(fine_results, coarse_results)
                 print('Validation MAP: \n', map50)
+                print('Validation find mAP: \n', compute_map(fine_results, []))
+                print('Validation coarse mAP: \n', compute_map([], coarse_results))
 
                 with open('val_result_faster.txt', 'a') as f:
                     f.write(str(map50))
@@ -440,9 +442,10 @@ if __name__ == '__main__':
                     f.write(str(eff / len(policies)) + '\n')
 
             # save
-            if e % opt.save_freq == 0:
-                torch.save(fine_model, os.path.join('weight', 'fine_model_{}'.format(e)))
-                torch.save(coarse_model, os.path.join('weight', 'coarse_model_{}'.format(e)))
+            if e % 1 == 0:
+                os.makedirs(opt.save_path, exist_ok=True)
+                torch.save(fine_model, os.path.join(opt.save_path, 'fine_model_{}'.format(e)))
+                torch.save(coarse_model, os.path.join(opt.save_path, 'coarse_model_{}'.format(e)))
 
         # Testing
         fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
