@@ -105,7 +105,6 @@ if __name__ == '__main__':
         "augment": False
     })
 
-
     efficient_config = easydict.EasyDict({
         "gpu_id": opt.device,
         "lr": 1e-3,
@@ -190,7 +189,7 @@ if __name__ == '__main__':
                 if len(coarse_dataset.tolist()) > 0:
                     coarse_val_dataset = load_dataset(coarse_dataset, coarse_tr, bs)
                     coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
-                    coarse_nb = len(coarse_train_loader)
+                    coarse_nb = len(coarse_val_loader)
                     for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
                         for j in coarse_detector.test(coarse_val):
                             coarse_results.append(j)
@@ -363,7 +362,7 @@ if __name__ == '__main__':
                 fine_metric_logger.update(loss=fine_loss_reduced, **fine_loss_dict_reduced)
                 fine_metric_logger.update(lr=fine_optim.param_groups[0]["lr"])
 
-                if i % 200 == 0:
+                if i % 50 == 0:
                     space_fmt = ':' + str(len(str(fine_train_nb))) + 'd'
                     log_msg = fine_metric_logger.delimiter.join([fine_header, '[{0' + space_fmt + '}/{1}]', '{meters}'])
                     print(log_msg.format(i, fine_train_nb, meters=str(fine_metric_logger)))
@@ -394,7 +393,7 @@ if __name__ == '__main__':
                 coarse_metric_logger.update(lr=fine_optim.param_groups[0]["lr"])
 
                 # if i % opt.print_freq == 0:
-                if i % 200 == 0:
+                if i % 50 == 0:
                     space_fmt = ':' + str(len(str(fine_train_nb))) + 'd'
                     log_msg = coarse_metric_logger.delimiter.join(
                         [coarse_header, '[{0' + space_fmt + '}/{1}]', '{meters}'])
@@ -427,7 +426,7 @@ if __name__ == '__main__':
                 if len(coarse_dataset.tolist()) > 0:
                     coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
                     coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
-                    coarse_nb = len(coarse_train_loader)
+                    coarse_nb = len(coarse_val_loader)
                     for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
                         coarse_results += make_results(coarse_model, coarse_val, device)
 

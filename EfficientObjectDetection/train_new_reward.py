@@ -122,7 +122,7 @@ class EfficientOD():
                 f_stats.append(result_fine[i * self.opt['split'] + j][6])
                 c_stats.append(result_coarse[i * self.opt['split'] + j][6])
 
-            if epoch > 10:
+            if epoch > self.opt['train_start']:
                 self.buffer.append([img_as_tensor.numpy(), f_ap, c_ap, f_stats, c_stats, f_ob, c_ob])
 
         if len(self.buffer) >= 1000:
@@ -187,7 +187,7 @@ class EfficientOD():
             if batch_iter == nb:
 
                 reward, sparsity, variance, policy_set = utils_ete.performance_stats(self.policies, self.rewards)
-                with open(self.opt.cv_dir+'/reward.txt', 'a') as f:
+                with open(self.opt['cv_dir']+'/reward.txt', 'a') as f:
                     f.write(str(reward) + '\n')
 
                 # save the model --- agent
