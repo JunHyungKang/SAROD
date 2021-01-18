@@ -17,11 +17,6 @@ from yolov5.utils.utils import *
 from yolov5.models.experimental import *
 
 mixed_precision = False
-# try:  # Mixed precision training https://github.com/NVIDIA/apex
-#     from apex import amp
-# except:
-#     print('Apex recommended for faster mixed precision training: https://github.com/NVIDIA/apex')
-#     mixed_precision = False  # not installed
 
 class yolov5():
 
@@ -104,65 +99,13 @@ class yolov5():
             self.opt.batch_size = self.opt.total_batch_size // self.opt.world_size
 
         # Train
-        if not self.opt['evolve']:
-            if self.opt['local_rank'] in [-1, 0]:
-                # print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-                self.tb_writer = SummaryWriter(log_dir=increment_dir('runs/exp', self.opt['name']))
-            else:
-                self.tb_writer = None
-            self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
-
-        # Evolve hyperparameters (optional)
+        if self.opt['local_rank'] in [-1, 0]:
+            # print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
+            self.tb_writer = SummaryWriter(log_dir=os.path.join(self.opt['save_path'], self.opt['name']))
         else:
-            assert self.opt['local_rank'] == -1, "DDP mode currently not implemented for Evolve!"
-
             self.tb_writer = None
-            self.opt.notest, self.opt.nosave = True, True  # only test/save final epoch
-            if self.opt.bucket:
-                os.system('gsutil cp gs://%s/evolve.txt .' % self.opt.bucket)  # download evolve.txt if exists
+        self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
 
-            for _ in range(10):  # generations to evolve
-                if os.path.exists('evolve.txt'):  # if evolve.txt exists: select best hyps and mutate
-                    # Select parent(s)
-                    parent = 'single'  # parent selection method: 'single' or 'weighted'
-                    x = np.loadtxt('evolve.txt', ndmin=2)
-                    n = min(5, len(x))  # number of previous results to consider
-                    x = x[np.argsort(-fitness(x))][:n]  # top n mutations
-                    w = fitness(x) - fitness(x).min()  # weights
-                    if parent == 'single' or len(x) == 1:
-                        # x = x[random.randint(0, n - 1)]  # random selection
-                        x = x[random.choices(range(n), weights=w)[0]]  # weighted selection
-                    elif parent == 'weighted':
-                        x = (x * w.reshape(n, 1)).sum(0) / w.sum()  # weighted combination
-
-                    # Mutate
-                    mp, s = 0.9, 0.2  # mutation probability, sigma
-                    npr = np.random
-                    npr.seed(int(time.time()))
-                    g = np.array([1, 1, 1, 1, 1, 1, 1, 0, .1, 1, 0, 1, 1, 1, 1, 1, 1, 1])  # gains
-                    ng = len(g)
-                    v = np.ones(ng)
-                    while all(v == 1):  # mutate until a change occurs (prevent duplicates)
-                        v = (g * (npr.random(ng) < mp) * npr.randn(ng) * npr.random() * s + 1).clip(0.3, 3.0)
-                    for i, k in enumerate(self.hyp.keys()):  # plt.hist(v.ravel(), 300)
-                        self.hyp[k] = x[i + 7] * v[i]  # mutate
-
-                # Clip to limits
-                keys = ['lr0', 'iou_t', 'momentum', 'weight_decay', 'hsv_s', 'hsv_v', 'translate', 'scale', 'fl_gamma']
-                limits = [(1e-5, 1e-2), (0.00, 0.70), (0.60, 0.98), (0, 0.001), (0, .9), (0, .9), (0, .9), (0, .9),
-                          (0, 3)]
-                for k, v in zip(keys, limits):
-                    self.hyp[k] = np.clip(self.hyp[k], v[0], v[1])
-
-                # Train mutation
-                # results = self.load_model(self.device, self.tb_writer, epochs)
-                self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
-
-                # Write mutation results
-                # print_mutation(self.hyp, results, self.opt.bucket)
-
-                # Plot results
-                # plot_evolution_results(hyp)
 
     def load_model(self, hyp, tb_writer, opt, device, epochs):
         self.hyp = hyp
@@ -328,10 +271,6 @@ class yolov5():
                 # tb_writer.add_hparams(hyp, {})  # causes duplicate https://github.com/ultralytics/yolov5/pull/384
                 self.tb_writer.add_histogram('classes', c, 0)
 
-            # Check anchors
-            if not self.opt['noautoanchor']:
-                check_anchors(self.dataset, model=self.model, thr=self.hyp['anchor_t'], imgsz=self.imgsz)
-
         self.nw = max(3 * self.nb, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
         self.maps = np.zeros(self.nc)  # mAP per class
         self.results = (0, 0, 0, 0, 0, 0, 0)  # 'P', 'R', 'mAP', 'F1', 'val GIoU', 'val Objectness', 'val Classification'
@@ -436,97 +375,15 @@ class yolov5():
         self.scheduler.step()
 
         # Save model
-        # print('save_model', i, nb)
         if i == nb:
             ckpt = {'epoch': epoch,
                     'model': self.ema.ema.module if hasattr(self.ema, 'module') else self.ema.ema,
                     'optimizer': None}
 
             # Save last, best and delete
-            torch.save(ckpt, self.wdir + str(epoch) + '.pt')
+            torch.save(ckpt, self.opt['save_path'] + self.wdir + str(epoch) + '.pt')
 
             del ckpt
-
-        # # Only the first process in DDP mode is allowed to log or save checkpoints.
-        # if rank in [-1, 0]:
-        #     # mAP
-        #     if self.ema is not None:
-        #         self.ema.update_attr(self.model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
-        #     # final_epoch = epoch + 1 == self.epochs
-        #     final_epoch = True
-        #     if not self.opt.notest or final_epoch:  # Calculate mAP
-        #         self.results, maps, times = test.test(self.opt.data,
-        #                                          batch_size=self.total_batch_size,
-        #                                          imgsz=self.imgsz_test,
-        #                                          save_json=final_epoch and self.opt.data.endswith(
-        #                                              os.sep + 'coco.yaml'),
-        #                                          model=self.ema.ema.module if hasattr(self.ema.ema,
-        #                                                                          'module') else self.ema.ema,
-        #                                          single_cls=self.opt.single_cls,
-        #                                          dataloader=self.testloader,
-        #                                          save_dir=self.log_dir)
-        #
-        #         # Write
-        #         with open(self.results_file, 'a') as f:
-        #             f.write(
-        #                 self.s + '%10.4g' * 7 % self.results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-        #         if len(self.opt.name) and self.opt.bucket:
-        #             os.system(
-        #                 'gsutil cp %s gs://%s/results/results%s.txt' % (self.results_file, self.opt['bucket'],
-        #                                                                 self.opt['name']))
-        #
-        #         # Tensorboard
-        #         if self.tb_writer:
-        #             tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
-        #                     'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5',
-        #                     'metrics/mAP_0.5:0.95',
-        #                     'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
-        #             for x, tag in zip(list(self.mloss[:-1]) + list(self.results), tags):
-        #                 self.tb_writer.add_scalar(tag, x, epoch)
-        #
-        #         # Update best mAP
-        #         fi = fitness(
-        #             np.array(self.results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
-        #         if fi > self.best_fitness:
-        #             self.best_fitness = fi
-        #
-        #     # Save model
-        #     save = (not self.opt.nosave) or (final_epoch and not self.opt.evolve)
-        #     if save:
-        #         with open(self.results_file, 'r') as f:  # create checkpoint
-        #             ckpt = {'epoch': epoch,
-        #                     'best_fitness': self.best_fitness,
-        #                     'training_results': f.read(),
-        #                     'model': self.ema.ema.module if hasattr(self.ema, 'module') else self.ema.ema,
-        #                     'optimizer': None if final_epoch else self.optimizer.state_dict()}
-        #
-        #         # Save last, best and delete
-        #         torch.save(ckpt, self.last)
-        #         if (self.best_fitness == fi) and not final_epoch:
-        #             torch.save(ckpt, self.best)
-        #         del ckpt
-        #     # end epoch ----------------------------------------------------------------------------------------------------
-        # # end training
-        #
-        # if rank in [-1, 0]:
-        #     # Strip optimizers
-        #     n = ('_' if len(self.opt.name) and not self.opt.name.isnumeric() else '') + self.opt.name
-        #     fresults, flast, fbest = 'results%s.txt' % n, self.wdir + 'last%s.pt' % n, self.wdir + 'best%s.pt' % n
-        #     for f1, f2 in zip([self.wdir + 'last.pt', self.wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
-        #         if os.path.exists(f1):
-        #             os.rename(f1, f2)  # rename
-        #             ispt = f2.endswith('.pt')  # is *.pt
-        #             strip_optimizer(f2) if ispt else None  # strip optimizer
-        #             os.system('gsutil cp %s gs://%s/weights' % (
-        #                 f2, self.opt.bucket)) if self.opt.bucket and ispt else None  # upload
-        #     # Finish
-        #     if not self.opt.evolve:
-        #         plot_results(save_dir=self.log_dir)  # save as results.png
-        #     print('%g epochs completed in %.3f hours.\n' % (epoch - self.start_epoch + 1, (time.time() - t0) / 3600))
-        #
-        # dist.destroy_process_group() if rank not in [-1, 0] else None
-        # torch.cuda.empty_cache()
-        # return self.results
 
     def eval(self, dataloader):
         augment = self.opt_eval['augment']
@@ -541,7 +398,7 @@ class yolov5():
                 self.ema.update_attr(self.model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             # final_epoch = epoch + 1 == self.epochs
             final_epoch = True
-            if not self.opt['notest'] or final_epoch:  # Calculate mAP
+            if final_epoch:  # Calculate mAP
                 model = self.ema.ema.module if hasattr(self.ema.ema, 'module') else self.ema.ema
                 save_dir = self.log_dir
                 imgsz = self.imgsz_test
@@ -677,132 +534,7 @@ class yolov5():
 
                     source_path = str(paths[si].split(os.sep)[-1].split('__')[0])
                     self.results.append((source_path, paths[si], mp, mr, map50, nl, stats))
-        #
-        #         # Plot images
-        #         # if i < 1:
-        #         #     f = Path(save_dir) / ('test_batch%g_gt.jpg' % i)  # filename
-        #         #     plot_images(img, targets, paths, str(f), names)  # ground truth
-        #         #     f = Path(save_dir) / ('test_batch%g_pred.jpg' % i)
-        #         #     plot_images(img, output_to_target(output, width, height), paths, str(f), names)  # predictions
-        #
-        #         # Compute statistics
-        #         stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
-        #
-        #         # print('\nstats[0].any()', stats[0])
-        #         # print('\nlen(stats) and stats[0].any()', len(stats) and stats[0].any())
-        #
-        #         if len(stats) and stats[0].any():
-        #             p, r, ap, f1, ap_class = ap_per_class(*stats)
-        #             p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-        #             mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-        #             nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-        #         else:
-        #             nt = torch.zeros(1)
-        #
-        #         # Print results
-        #         pf = '%20s' + '%12.3g' * 6  # print format
-        #         print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
-        #
-        #         # Print results per class
-        #         verbose = False
-        #         if verbose and nc > 1 and len(stats):
-        #             for i, c in enumerate(ap_class):
-        #                 print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-        #
-        #         # Print speeds
-        #         # t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
-        #         # if not training:
-        #         #     print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
-        #
-        #         # Save JSON
-        #         # if save_json and len(jdict):
-        #         #     f = 'detections_val2017_%s_results.json' % \
-        #         #         (weights.split(os.sep)[-1].replace('.pt', '') if isinstance(weights, str) else '')  # filename
-        #         #     print('\nCOCO mAP with pycocotools... saving %s...' % f)
-        #         #     with open(f, 'w') as file:
-        #         #         json.dump(jdict, file)
-        #         #
-        #         #     try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-        #         #         from pycocotools.coco import COCO
-        #         #         from pycocotools.cocoeval import COCOeval
-        #         #
-        #         #         imgIds = [int(Path(x).stem) for x in dataloader.dataset.img_files]
-        #         #         cocoGt = COCO(
-        #         #             glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
-        #         #         cocoDt = cocoGt.loadRes(f)  # initialize COCO pred api
-        #         #         cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-        #         #         cocoEval.params.imgIds = imgIds  # image IDs to evaluate
-        #         #         cocoEval.evaluate()
-        #         #         cocoEval.accumulate()
-        #         #         cocoEval.summarize()
-        #         #         map, map50 = cocoEval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
-        #         #     except Exception as e:
-        #         #         print('ERROR: pycocotools unable to run: %s' % e)
-        #
-        #         # Return results
-        #         model.float()  # for training
-        #         maps = np.zeros(nc) + map
-        #         for i, c in enumerate(ap_class):
-        #             maps[c] = ap[i]
-        #         self.results, maps, times = (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
-        #
-        #         # Write
-        #         with open(self.results_file, 'a') as f:
-        #             f.write(
-        #                 self.s + '%10.4g' * 7 % self.results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-        #         if len(self.opt.name) and self.opt.bucket:
-        #             os.system(
-        #                 'gsutil cp %s gs://%s/results/results%s.txt' % (self.results_file, self.opt['bucket'],
-        #                                                                 self.opt['name']))
-        #
-        #         # Tensorboard
-        #         if self.tb_writer:
-        #             tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
-        #                     'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5',
-        #                     'metrics/mAP_0.5:0.95',
-        #                     'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
-        #             for x, tag in zip(list(self.mloss[:-1]) + list(self.results), tags):
-        #                 self.tb_writer.add_scalar(tag, x, epoch)
-        #
-        #         # Update best mAP
-        #         fi = fitness(
-        #             np.array(self.results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
-        #         if fi > self.best_fitness:
-        #             self.best_fitness = fi
-        #
-        #     # Save model
-        #     save = (not self.opt.nosave) or (final_epoch and not self.opt.evolve)
-        #     if save:
-        #         with open(self.results_file, 'r') as f:  # create checkpoint
-        #             ckpt = {'epoch': epoch,
-        #                     'best_fitness': self.best_fitness,
-        #                     'training_results': f.read(),
-        #                     'model': self.ema.ema.module if hasattr(self.ema, 'module') else self.ema.ema,
-        #                     'optimizer': None if final_epoch else self.optimizer.state_dict()}
-        #
-        #         # Save last, best and delete
-        #         torch.save(ckpt, self.last)
-        #         if (self.best_fitness == fi) and not final_epoch:
-        #             torch.save(ckpt, self.best)
-        #         del ckpt
-        #     # end epoch ----------------------------------------------------------------------------------------------------
-        # # end training
-        #
-        # if rank in [-1, 0]:
-        #     # Strip optimizers
-        #     n = ('_' if len(self.opt.name) and not self.opt.name.isnumeric() else '') + self.opt.name
-        #     fresults, flast, fbest = 'results%s.txt' % n, self.wdir + 'last%s.pt' % n, self.wdir + 'best%s.pt' % n
-        #     for f1, f2 in zip([self.wdir + 'last.pt', self.wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
-        #         if os.path.exists(f1):
-        #             os.rename(f1, f2)  # rename
-        #             ispt = f2.endswith('.pt')  # is *.pt
-        #             strip_optimizer(f2) if ispt else None  # strip optimizer
-        #             os.system('gsutil cp %s gs://%s/weights' % (
-        #                 f2, self.opt.bucket)) if self.opt.bucket and ispt else None  # upload
-        #     # Finish
-        #     if not self.opt.evolve:
-        #         plot_results(save_dir=self.log_dir)  # save as results.png
-        #     print('%g epochs completed in %.3f hours.\n' % (epoch - self.start_epoch + 1, (time.time() - t0) / 3600))
+
 
         dist.destroy_process_group() if rank not in [-1, 0] else None
         torch.cuda.empty_cache()
@@ -824,7 +556,7 @@ class yolov5():
                 self.ema.update_attr(self.model, include=['yaml', 'nc', 'hyp', 'gr', 'names', 'stride'])
             # final_epoch = epoch + 1 == self.epochs
             final_epoch = True
-            if not self.opt['notest'] or final_epoch:  # Calculate mAP
+            if final_epoch:  # Calculate mAP
                 model = self.ema.ema.module if hasattr(self.ema.ema, 'module') else self.ema.ema
                 save_dir = self.log_dir
                 imgsz = self.imgsz_test
@@ -957,142 +689,8 @@ class yolov5():
 
                     source_path = str(paths[si].split(os.sep)[-1].split('__')[0])
                     self.results.append((source_path, paths[si], mp, mr, map50, nl, stats_return))
-        #
-        #         # Plot images
-        #         # if i < 1:
-        #         #     f = Path(save_dir) / ('test_batch%g_gt.jpg' % i)  # filename
-        #         #     plot_images(img, targets, paths, str(f), names)  # ground truth
-        #         #     f = Path(save_dir) / ('test_batch%g_pred.jpg' % i)
-        #         #     plot_images(img, output_to_target(output, width, height), paths, str(f), names)  # predictions
-        #
-        #         # Compute statistics
-        #         stats = [np.concatenate(x, 0) for x in zip(*stats)]  # to numpy
-        #
-        #         # print('\nstats[0].any()', stats[0])
-        #         # print('\nlen(stats) and stats[0].any()', len(stats) and stats[0].any())
-        #
-        #         if len(stats) and stats[0].any():
-        #             p, r, ap, f1, ap_class = ap_per_class(*stats)
-        #             p, r, ap50, ap = p[:, 0], r[:, 0], ap[:, 0], ap.mean(1)  # [P, R, AP@0.5, AP@0.5:0.95]
-        #             mp, mr, map50, map = p.mean(), r.mean(), ap50.mean(), ap.mean()
-        #             nt = np.bincount(stats[3].astype(np.int64), minlength=nc)  # number of targets per class
-        #         else:
-        #             nt = torch.zeros(1)
-        #
-        #         # Print results
-        #         pf = '%20s' + '%12.3g' * 6  # print format
-        #         print(pf % ('all', seen, nt.sum(), mp, mr, map50, map))
-        #
-        #         # Print results per class
-        #         verbose = False
-        #         if verbose and nc > 1 and len(stats):
-        #             for i, c in enumerate(ap_class):
-        #                 print(pf % (names[c], seen, nt[c], p[i], r[i], ap50[i], ap[i]))
-        #
-        #         # Print speeds
-        #         # t = tuple(x / seen * 1E3 for x in (t0, t1, t0 + t1)) + (imgsz, imgsz, batch_size)  # tuple
-        #         # if not training:
-        #         #     print('Speed: %.1f/%.1f/%.1f ms inference/NMS/total per %gx%g image at batch-size %g' % t)
-        #
-        #         # Save JSON
-        #         # if save_json and len(jdict):
-        #         #     f = 'detections_val2017_%s_results.json' % \
-        #         #         (weights.split(os.sep)[-1].replace('.pt', '') if isinstance(weights, str) else '')  # filename
-        #         #     print('\nCOCO mAP with pycocotools... saving %s...' % f)
-        #         #     with open(f, 'w') as file:
-        #         #         json.dump(jdict, file)
-        #         #
-        #         #     try:  # https://github.com/cocodataset/cocoapi/blob/master/PythonAPI/pycocoEvalDemo.ipynb
-        #         #         from pycocotools.coco import COCO
-        #         #         from pycocotools.cocoeval import COCOeval
-        #         #
-        #         #         imgIds = [int(Path(x).stem) for x in dataloader.dataset.img_files]
-        #         #         cocoGt = COCO(
-        #         #             glob.glob('../coco/annotations/instances_val*.json')[0])  # initialize COCO ground truth api
-        #         #         cocoDt = cocoGt.loadRes(f)  # initialize COCO pred api
-        #         #         cocoEval = COCOeval(cocoGt, cocoDt, 'bbox')
-        #         #         cocoEval.params.imgIds = imgIds  # image IDs to evaluate
-        #         #         cocoEval.evaluate()
-        #         #         cocoEval.accumulate()
-        #         #         cocoEval.summarize()
-        #         #         map, map50 = cocoEval.stats[:2]  # update results (mAP@0.5:0.95, mAP@0.5)
-        #         #     except Exception as e:
-        #         #         print('ERROR: pycocotools unable to run: %s' % e)
-        #
-        #         # Return results
-        #         model.float()  # for training
-        #         maps = np.zeros(nc) + map
-        #         for i, c in enumerate(ap_class):
-        #             maps[c] = ap[i]
-        #         self.results, maps, times = (mp, mr, map50, map, *(loss.cpu() / len(dataloader)).tolist()), maps, t
-        #
-        #         # Write
-        #         with open(self.results_file, 'a') as f:
-        #             f.write(
-        #                 self.s + '%10.4g' * 7 % self.results + '\n')  # P, R, mAP, F1, test_losses=(GIoU, obj, cls)
-        #         if len(self.opt.name) and self.opt.bucket:
-        #             os.system(
-        #                 'gsutil cp %s gs://%s/results/results%s.txt' % (self.results_file, self.opt['bucket'],
-        #                                                                 self.opt['name']))
-        #
-        #         # Tensorboard
-        #         if self.tb_writer:
-        #             tags = ['train/giou_loss', 'train/obj_loss', 'train/cls_loss',
-        #                     'metrics/precision', 'metrics/recall', 'metrics/mAP_0.5',
-        #                     'metrics/mAP_0.5:0.95',
-        #                     'val/giou_loss', 'val/obj_loss', 'val/cls_loss']
-        #             for x, tag in zip(list(self.mloss[:-1]) + list(self.results), tags):
-        #                 self.tb_writer.add_scalar(tag, x, epoch)
-        #
-        #         # Update best mAP
-        #         fi = fitness(
-        #             np.array(self.results).reshape(1, -1))  # fitness_i = weighted combination of [P, R, mAP, F1]
-        #         if fi > self.best_fitness:
-        #             self.best_fitness = fi
-        #
-        #     # Save model
-        #     save = (not self.opt.nosave) or (final_epoch and not self.opt.evolve)
-        #     if save:
-        #         with open(self.results_file, 'r') as f:  # create checkpoint
-        #             ckpt = {'epoch': epoch,
-        #                     'best_fitness': self.best_fitness,
-        #                     'training_results': f.read(),
-        #                     'model': self.ema.ema.module if hasattr(self.ema, 'module') else self.ema.ema,
-        #                     'optimizer': None if final_epoch else self.optimizer.state_dict()}
-        #
-        #         # Save last, best and delete
-        #         torch.save(ckpt, self.last)
-        #         if (self.best_fitness == fi) and not final_epoch:
-        #             torch.save(ckpt, self.best)
-        #         del ckpt
-        #     # end epoch ----------------------------------------------------------------------------------------------------
-        # # end training
-        #
-        # if rank in [-1, 0]:
-        #     # Strip optimizers
-        #     n = ('_' if len(self.opt.name) and not self.opt.name.isnumeric() else '') + self.opt.name
-        #     fresults, flast, fbest = 'results%s.txt' % n, self.wdir + 'last%s.pt' % n, self.wdir + 'best%s.pt' % n
-        #     for f1, f2 in zip([self.wdir + 'last.pt', self.wdir + 'best.pt', 'results.txt'], [flast, fbest, fresults]):
-        #         if os.path.exists(f1):
-        #             os.rename(f1, f2)  # rename
-        #             ispt = f2.endswith('.pt')  # is *.pt
-        #             strip_optimizer(f2) if ispt else None  # strip optimizer
-        #             os.system('gsutil cp %s gs://%s/weights' % (
-        #                 f2, self.opt.bucket)) if self.opt.bucket and ispt else None  # upload
-        #     # Finish
-        #     if not self.opt.evolve:
-        #         plot_results(save_dir=self.log_dir)  # save as results.png
-        #     print('%g epochs completed in %.3f hours.\n' % (epoch - self.start_epoch + 1, (time.time() - t0) / 3600))
 
         dist.destroy_process_group() if rank not in [-1, 0] else None
         torch.cuda.empty_cache()
 
         return self.results
-
-
-    # def test(self, inputs, label_path, ind, i):
-    #     results = test.test_rl(inputs, label_path, ind, i, weights=self.opt.weights, device=self.opt.device, batch_size=self.total_batch_size, imgsz=self.imgsz_test,
-    #                                  model=self.ema.ema.module if hasattr(self.ema.ema, 'module') else self.ema.ema,
-    #                                  single_cls=self.opt.single_cls)
-    #
-    #     return results
