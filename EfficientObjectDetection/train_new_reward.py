@@ -231,34 +231,15 @@ class EfficientOD():
             for i, policy in enumerate(policy.cpu().data):
                 for j, policy_element in enumerate(policy):
                     efficiency.append(policy_element)
-
                     if policy_element == 0:
-                        if j ==0:
-                            coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
-                        if j ==1:
-                            coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___128.png')))
-                        if j ==2:
-                            coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___0.png')))
-                        if j ==3:
-                            coarse_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___128.png')))
+                        coarse_dataset.append(
+                            os.path.join(split_val_path, img_path[i].replace('.png',
+                                                                             self.opt['split_format'][j] + '.png')))
 
                     elif policy_element == 1:
-                        if j ==0:
-                            fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___0.png')))
-                        if j ==1:
-                            fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__0___128.png')))
-                        if j ==2:
-                            fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___0.png')))
-                        if j ==3:
-                            fine_dataset.append(
-                                os.path.join(split_val_path, img_path[i].replace('.png', '__1__128___128.png')))
+                        fine_dataset.append(
+                            os.path.join(split_val_path, img_path[i].replace('.png',
+                                                                             self.opt['split_format'][j] + '.png')))
 
         return np.array(fine_dataset), np.array(coarse_dataset), efficiency
 

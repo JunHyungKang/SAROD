@@ -10,6 +10,7 @@ import time
 import os
 import utils
 import copy
+import easydict
 
 # torch
 import torchvision
@@ -27,16 +28,12 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=200)
     parser.add_argument('--batch_size', type=int, default=40, help="Total batch size for all gpus.")
+    parser.add_argument('--RL_batch_size', type=int, default=40, help="Total batch size for all gpus.")
     parser.add_argument('--device', default='2', help='cuda device, i.e. 0 or 0,1,2,3 or cpu')
     parser.add_argument('--test_epoch', type=int, default=10)
     parser.add_argument('--eval_epoch', type=int, default=1)
-    parser.add_argument('--fine_tr', default='config/fine_tr.yaml')
-    parser.add_argument('--fine_eval', default='config/fine_eval.yaml')
-    parser.add_argument('--coarse_tr', default='config/coarse_tr.yaml')
-    parser.add_argument('--coarse_eval', default='config/coarse_eval.yaml')
-    parser.add_argument('--EfficientOD', default='config/EfficientOD.yaml')
-    parser.add_argument('--save_freq', default=5)
     parser.add_argument('--split', type=int, default=4)
+    parser.add_argument('--split_format', nargs='*')
     parser.add_argument('--split_train_path',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/split_data_4_80/rl_ver/train/images')
     parser.add_argument('--split_val_path',
@@ -49,22 +46,86 @@ if __name__ == '__main__':
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/val/images')
     parser.add_argument('--original_img_path_test',
                         default='/home/SSDD/ICIP21_dataset/800_HRSID/origin_data/rl_ver/test/images')
+    parser.add_argument('--fine_img_size', nargs='+', type=int, default=[480, 480])
+    parser.add_argument('--coarse_img_size', nargs='+', type=int, default=[96, 96])
     parser.add_argument('--model', default='yolov5')
+    parser.add_argument('--RL_train_start_epoch', type=int, default=5)
+    parser.add_argument('--save_path', type=str, default='save')
     opt = parser.parse_args()
 
-    if opt.model == 'yolov5':
-        # training option load from yaml files
-        with open(opt.fine_tr) as f:
-            fine_tr = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.fine_eval) as f:
-            fine_eval = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.coarse_tr) as f:
-            coarse_tr = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.coarse_eval) as f:
-            coarse_eval = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.EfficientOD) as f:
-            efficient_config = yaml.load(f, Loader=yaml.FullLoader)
+    fine_tr = easydict.EasyDict({
+        "cfg": "yolov5/models/yolov5x_custom.yaml",
+        "data": "yolov5/data/HRSID_800_od.yaml",
+        "hyp": '',
+        "img_size": opt.fine_img_size,
+        "resume": False,
+        "bucket": '',
+        "cache_images": False,
+        "weights": '',
+        "save_path": opt.save_path,
+        "name": "yolo_fine",
+        "device": opt.device,
+        "multi_scale": False,
+        "single_cls": True,
+        "sync_bn": False,
+        "local_rank": -1
+    })
 
+    fine_eval = easydict.EasyDict({
+        "data": "yolov5/data/HRSID_800_rl.yaml",
+        "batch_size": opt.batch_size,
+        "conf_thres": 0.001,
+        "iou_thres": 0.6,  # for NMS
+        "augment": False
+    })
+
+    coarse_tr = easydict.EasyDict({
+        "cfg": "yolov5/models/yolov5x_custom.yaml",
+        "data": "yolov5/data/HRSID_800_od.yaml",
+        "hyp": '',
+        "img_size": opt.coarse_img_size,
+        "resume": False,
+        "bucket": '',
+        "cache_images": False,
+        "weights": "",
+        "save_path": opt.save_path,
+        "name": "yolo_coarse",
+        "device": opt.device,
+        "multi_scale": False,
+        "single_cls": True,
+        "sync_bn": False,
+        "local_rank": -1
+    })
+
+    coarse_eval = easydict.EasyDict({
+        "data": "yolov5/data/HRSID_800_rl.yaml",
+        "batch_size": opt.batch_size,
+        "conf_thres": 0.001,
+        "iou_thres": 0.6,  # for NMS
+        "augment": False
+    })
+
+
+    efficient_config = easydict.EasyDict({
+        "gpu_id": opt.device,
+        "lr": 1e-3,
+        "cv_dir": opt.save_path,
+        "save_name": 'yolo',
+        "batch_size": opt.batch_size,
+        "step_batch_size": opt.RL_batch_size,
+        "img_size": opt.fine_img_size,
+        "num_workers": 0,
+        "parallel": False,
+        "alpha": 0.8,
+        "beta": 0.1,
+        "sigma": 0.5,
+        "load": None,
+        "split": opt.split,
+        "split_format": opt.split_format,
+        "train_start": opt.RL_train_start_epoch
+    })
+
+    if opt.model == 'yolov5':
         epochs = opt.epochs
         bs = opt.batch_size
 
@@ -86,7 +147,7 @@ if __name__ == '__main__':
         # Training
         train_imgs = load_filenames(split_train_path, split, bs).files_array()
         fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
-        coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
+        coarse_train_dataset = load_dataset(train_imgs, coarse_tr, bs)
 
         for e in range(epochs):
             print('Starting training for %g epochs...' % e)
@@ -101,14 +162,14 @@ if __name__ == '__main__':
 
             for i, (fine_train, coarse_train) in tqdm.tqdm(enumerate(zip(fine_train_loader, coarse_train_loader)),
                                                            total=fine_train_nb):
-                fine_detector.train(e, i+1, nb, fine_train_dataset, fine_train)
-                coarse_detector.train(e, i+1, nb, coarse_train_dataset, coarse_train)
+                fine_detector.train(e, i + 1, nb, fine_train_dataset, fine_train)
+                coarse_detector.train(e, i + 1, nb, coarse_train_dataset, coarse_train)
 
                 # result = (source_path, paths[si], mp, mr, map50, nl, stats)
                 fine_results = fine_detector.eval(fine_train)
                 coarse_results = coarse_detector.eval(coarse_train)
 
-                rl_agent.train(e, i+1, nb, fine_results, coarse_results, original_img_path_train)
+                rl_agent.train(e, i + 1, nb, fine_results, coarse_results, original_img_path_train)
 
             # Validation
             if e % 1 == 0:
@@ -127,7 +188,7 @@ if __name__ == '__main__':
 
                 print('len(coarse_dataset.tolist()): \n', len(coarse_dataset.tolist()))
                 if len(coarse_dataset.tolist()) > 0:
-                    coarse_val_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+                    coarse_val_dataset = load_dataset(coarse_dataset, coarse_tr, bs)
                     coarse_val_loader = load_dataloader(bs, coarse_val_dataset)
                     coarse_nb = len(coarse_train_loader)
                     for i, coarse_val in tqdm.tqdm(enumerate(coarse_val_loader), total=coarse_nb):
@@ -138,14 +199,14 @@ if __name__ == '__main__':
                 print('Validation mAP: \n', map50)
                 print('Time for validation: \n', time.time() - s_time)
 
-                with open('val_result_exp2.txt', 'a') as f:
+                with open('val_result.txt', 'a') as f:
                     f.write(str(map50) + '\n')
 
                 eff = 0
                 for i in policies:
                     eff += int(i)
-                with open('val_policies_exp2.txt', 'a') as f:
-                    f.write(str(eff/len(policies)) + '\n')
+                with open('val_policies.txt', 'a') as f:
+                    f.write(str(eff / len(policies)) + '\n')
 
         # Testing
         fine_dataset, coarse_dataset, policies = rl_agent.eval(split_test_path, original_img_path_test)
@@ -160,7 +221,7 @@ if __name__ == '__main__':
                     fine_results.append(j)
 
         if len(coarse_dataset.tolist()) > 0:
-            coarse_test_dataset = load_dataset(coarse_dataset, fine_tr, bs)
+            coarse_test_dataset = load_dataset(coarse_dataset, coarse_tr, bs)
             coarse_test_loader = load_dataloader(bs, coarse_test_dataset)
             coarse_nb = len(coarse_test_loader)
             for i, coarse_test in tqdm.tqdm(enumerate(coarse_test_loader), total=coarse_nb):
@@ -170,13 +231,13 @@ if __name__ == '__main__':
         map50 = compute_map(fine_results, coarse_results)
         print('Test mAP: \n', map50)
 
-        with open('test_result_exp2.txt', 'a') as f:
+        with open('test_result.txt', 'a') as f:
             f.write(str(map50) + '\n')
 
         eff = 0
         for i in policies:
             eff += int(i)
-        with open('test_policies_exp2.txt', 'a') as f:
+        with open('test_policies.txt', 'a') as f:
             f.write(str(eff / len(policies)) + '\n')
 
     elif opt.model == 'faster_rcnn':
@@ -186,18 +247,6 @@ if __name__ == '__main__':
         use_cuda = torch.cuda.is_available()
         print("GPU device ", use_cuda)
         device = torch.device('cuda') if torch.cuda.is_available() else torch.device('cpu')
-
-        # training option load from yaml files
-        with open(opt.fine_tr) as f:
-            fine_tr = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.fine_eval) as f:
-            fine_eval = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.coarse_tr) as f:
-            coarse_tr = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.coarse_eval) as f:
-            coarse_eval = yaml.load(f, Loader=yaml.FullLoader)
-        with open(opt.EfficientOD) as f:
-            efficient_config = yaml.load(f, Loader=yaml.FullLoader)
 
         efficient_config['load'] = None  # bug fix
 
@@ -254,7 +303,7 @@ if __name__ == '__main__':
         # label이 없더라도 loader에 image 생성
         train_imgs = load_filenames(split_train_path, split, bs).files_array()
         fine_train_dataset = load_dataset(train_imgs, fine_tr, bs)
-        coarse_train_dataset = load_dataset(train_imgs, fine_tr, bs)
+        coarse_train_dataset = load_dataset(train_imgs, coarse_tr, bs)
         for e in range(epochs):
             print('Starting training for %g epochs...' % e)
 
