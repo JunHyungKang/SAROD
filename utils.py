@@ -50,7 +50,7 @@ def load_image(self, index):
 
 def load_dataloader(batch_size, dataset):
     batch_size = min(batch_size, len(dataset))
-    nw = min([os.cpu_count() // 1, batch_size if batch_size > 1 else 0, 8])  # number of workers
+    nw = 8  # number of workers
     sampler_list = []
     temp = list(range(round(len(dataset)/4)-1))
     np.random.shuffle(temp)
