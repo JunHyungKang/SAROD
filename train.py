@@ -409,7 +409,7 @@ if __name__ == '__main__':
                 coarse_results = make_results(coarse_model, coarse_train, device)
 
                 # conf_thresh=0.001 / iou_thres=0.6
-                rl_agent.train(e, i, nb, fine_results, coarse_results, original_data_path=original_img_path_train)
+                rl_agent.train(e, i+1, nb, fine_results, coarse_results, original_data_path=original_img_path_train)
 
                 ## Validation
             if e % 1 == 0:
