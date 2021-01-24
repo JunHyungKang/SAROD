@@ -113,7 +113,7 @@ if __name__ == '__main__':
         "batch_size": opt.batch_size,
         "step_batch_size": opt.RL_batch_size,
         "img_size": opt.fine_img_size,
-        "num_workers": 8,
+        "num_workers": 1,
         "parallel": False,
         "alpha": 0.8,
         "beta": 0.1,

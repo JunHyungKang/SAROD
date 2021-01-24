@@ -59,7 +59,7 @@ class EfficientOD():
         self.epoch = None
         self.original_data_path = None
         gpu_id = self.opt['gpu_id']
-        self.buffer = deque(maxlen=20000)
+        self.buffer = deque(maxlen=5000)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
         use_cuda = torch.cuda.is_available()
         print("GPU device for EfficientOD: ", use_cuda)
@@ -100,7 +100,7 @@ class EfficientOD():
 
         p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
 
-        self.agent.train()
+        self.agent.train() # resnet backbone
         if batch_iter == 1:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
@@ -180,9 +180,9 @@ class EfficientOD():
             self.optimizer_agent.step()
             self.optimizer_critic.step()
 
-            self.rewards.append(reward_sample.cpu())
-            self.rewards_baseline.append(reward_map.cpu())
-            self.policies.append(policy_sample.data.cpu())
+            self.rewards.append(reward_sample)
+            self.rewards_baseline.append(reward_map)
+            self.policies.append(policy_sample.data)
 
             if batch_iter == nb:
 

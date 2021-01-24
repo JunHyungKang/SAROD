@@ -3,7 +3,7 @@ lr: 1e-3
 cv_dir: weight
 save_name: exp3
 batch_size: 60
-step_batch_size: 100
+step_batch_size: 60
 img_size: 128
 epoch_step: 20
 max_epochs: opt.epochs
