@@ -93,7 +93,7 @@ if __name__ == '__main__':
         "img_size": 480,
         "epoch_step": 20,
         "max_epochs": opt.epochs,
-        "num_workers": 0,
+        "num_workers": 8,
         "parallel": False,
         "alpha": 0.8,
         "beta": 0.1,

@@ -25,7 +25,6 @@ Image.MAX_IMAGE_PIXELS = None
 
 from EfficientObjectDetection.utils import utils_ete, utils_detector
 from EfficientObjectDetection.constants import base_dir_metric_cd, base_dir_metric_fd
-from EfficientObjectDetection.constants import num_actions
 import yolov5.utils.utils as yoloutil
 
 import warnings
@@ -59,7 +58,7 @@ class EfficientOD():
         self.epoch = None
         self.original_data_path = None
         gpu_id = self.opt['gpu_id']
-        self.buffer = deque(maxlen=20000)
+        self.buffer = deque(maxlen=3000)
         os.environ['CUDA_VISIBLE_DEVICES'] = str(gpu_id)
         use_cuda = torch.cuda.is_available()
         print("GPU device for EfficientOD: ", use_cuda)
@@ -69,7 +68,7 @@ class EfficientOD():
             os.makedirs(self.opt['cv_dir'])
         # utils_ete.save_args(__file__, self.opt)
 
-        self.agent = utils_ete.get_model(num_actions)
+        self.agent = utils_ete.get_model(self.opt['split'])
         self.critic = utils_ete.critic_model(1)
 
         # ---- Load the pre-trained model ----------------------
@@ -100,13 +99,13 @@ class EfficientOD():
 
         p, r, f1, mp, mr, map50, map, t0, t1 = 0., 0., 0., 0., 0., 0., 0., 0., 0.
 
-        self.agent.train()
+        self.agent.train() # resnet backbone
         if batch_iter == 1:
             self.rewards, self.rewards_baseline, self.policies, self.stats_list, self.efficiency = [], [], [], [], []
 
         assert len(result_fine)==len(result_coarse), 'result data size is different between fine & coarse'
 
-        # ressults = (source_path, paths[si], mp, mr, map50, nl, stats)
+        # results = (source_path, paths[si], mp, mr, map50, nl, stats)
         for i in range(int(len(result_fine)/self.opt['split'])):
             f_ap, c_ap, f_ob, c_ob, f_stats, c_stats = [], [], [], [], [], []
             img_path = os.path.join(self.original_data_path, result_fine[i][0] + '.png')
@@ -122,10 +121,10 @@ class EfficientOD():
                 f_stats.append(result_fine[i * self.opt['split'] + j][6])
                 c_stats.append(result_coarse[i * self.opt['split'] + j][6])
 
-            if epoch > self.opt['train_start']:
+            if epoch >= self.opt['train_start']:
                 self.buffer.append([img_as_tensor.numpy(), f_ap, c_ap, f_stats, c_stats, f_ob, c_ob])
 
-        if len(self.buffer) >= 1000:
+        if len(self.buffer) >= self.opt['step_batch_size']:
             # print('RL training is ongoing! buffer size is more than 1000')
             # pbar = range((epoch+1)*6)
             # for i in pbar:
@@ -154,12 +153,11 @@ class EfficientOD():
             policy_map[policy_map >= 0.5] = 1.0
             policy_map = Variable(policy_map)
 
-            f_ap = torch.from_numpy(np.array(f_ap).reshape((-1, 4)))
-            c_ap = torch.from_numpy(np.array(c_ap).reshape((-1, 4)))
-            f_ob = torch.from_numpy(np.array(f_ob).reshape((-1, 4)))
-            c_ob = torch.from_numpy(np.array(c_ob).reshape((-1, 4)))
+            f_ap = torch.from_numpy(np.array(f_ap).reshape((-1, self.opt['split'])))
+            c_ap = torch.from_numpy(np.array(c_ap).reshape((-1, self.opt['split'])))
+            f_ob = torch.from_numpy(np.array(f_ob).reshape((-1, self.opt['split'])))
+            c_ob = torch.from_numpy(np.array(c_ob).reshape((-1, self.opt['split'])))
             f_ob = f_ob.float()
-            c_ob = c_ob.float()
 
             reward_map = utils_ete.compute_reward_sarod(f_ap, c_ap, f_ob, c_ob, policy_map.cpu().data, self.opt['beta'], self.opt['sigma'])
             reward_sample = utils_ete.compute_reward_sarod(f_ap, c_ap, f_ob, c_ob, policy_sample.cpu().data, self.opt['beta'],
@@ -180,9 +178,9 @@ class EfficientOD():
             self.optimizer_agent.step()
             self.optimizer_critic.step()
 
-            self.rewards.append(reward_sample.cpu())
-            self.rewards_baseline.append(reward_map.cpu())
-            self.policies.append(policy_sample.data.cpu())
+            self.rewards.append(reward_sample)
+            self.rewards_baseline.append(reward_map)
+            self.policies.append(policy_sample.data)
 
             if batch_iter == nb:
 

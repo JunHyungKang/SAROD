@@ -101,7 +101,7 @@ class yolov5():
         # Train
         if self.opt['local_rank'] in [-1, 0]:
             # print('Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/')
-            self.tb_writer = SummaryWriter(log_dir=os.path.join(self.opt['save_path'], self.opt['name']))
+            self.tb_writer = None
         else:
             self.tb_writer = None
         self.load_model(self.hyp, self.tb_writer, self.opt, self.device, epochs)
@@ -112,7 +112,7 @@ class yolov5():
         self.tb_writer = tb_writer
         self.opt = opt
         self.device = device
-        self.log_dir = self.tb_writer.log_dir if self.tb_writer else 'runs/evolution'  # run directory
+        self.log_dir = os.path.join(self.opt['save_path'], self.opt['name'])
         self.wdir = str(Path(self.log_dir) / 'weights') + os.sep  # weights directory
         os.makedirs(self.wdir, exist_ok=True)
         self.last = self.wdir + 'last.pt'
@@ -267,9 +267,9 @@ class yolov5():
             # cf = torch.bincount(c.long(), minlength=nc) + 1.
             # model._initialize_biases(cf.to(device))
             plot_labels(labels, save_dir=self.log_dir)
-            if self.tb_writer:
-                # tb_writer.add_hparams(hyp, {})  # causes duplicate https://github.com/ultralytics/yolov5/pull/384
-                self.tb_writer.add_histogram('classes', c, 0)
+#             if self.tb_writer:
+#                 # tb_writer.add_hparams(hyp, {})  # causes duplicate https://github.com/ultralytics/yolov5/pull/384
+#                 self.tb_writer.add_histogram('classes', c, 0)
 
         self.nw = max(3 * self.nb, 1e3)  # number of warmup iterations, max(3 epochs, 1k iterations)
         self.maps = np.zeros(self.nc)  # mAP per class
@@ -365,9 +365,9 @@ class yolov5():
             if ni < 3:
                 f = str(Path(self.log_dir) / ('train_batch%g.jpg' % ni))  # filename
                 result = plot_images(images=imgs, targets=targets, paths=paths, fname=f)
-                if self.tb_writer and result is not None:
-                    self.tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
-                    # tb_writer.add_graph(model, imgs)  # add model to tensorboard
+#                 if self.tb_writer and result is not None:
+#                     self.tb_writer.add_image(f, result, dataformats='HWC', global_step=epoch)
+#                     # tb_writer.add_graph(model, imgs)  # add model to tensorboard
 
         # end batch --------------------------------------------------------------------------------------------
 
